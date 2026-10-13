@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASCII Forge</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header>
+  <div class="logo">▓▒░ ASCII<b>FORGE</b></div>
+  <input id="projName" class="proj" title="nome do projeto">
+  <nav id="tabs">
+    <button data-view="editor">✎ Editor</button>
+    <button data-view="convert">⇄ Imagem → ASCII</button>
+    <button data-view="map">▦ Mapa &amp; Luz</button>
+    <button data-view="export">⇩ Exportar</button>
+  </nav>
+  <div class="hdr-right">
+    <label>Zoom <input type="range" id="zoom" min="8" max="40" step="1"><span id="zoomVal"></span></label>
+    <select id="fontSel" title="fonte">
+      <option value="'Cascadia Mono','Consolas','DejaVu Sans Mono','Menlo','Courier New',monospace">Cascadia Mono</option>
+      <option value="'Consolas',monospace">Consolas</option>
+      <option value="'Courier New',monospace">Courier New</option>
+      <option value="'Lucida Console',monospace">Lucida Console</option>
+      <option value="monospace">monospace do sistema</option>
+    </select>
+    <select id="lhSel" title="altura da linha (proporção da célula)">
+      <option value="1">linha 1.0</option>
+      <option value="1.1">linha 1.1</option>
+      <option value="1.2">linha 1.2</option>
+      <option value="1.35">linha 1.35</option>
+    </select>
+    <a href="engine/index.html" class="engine-link" title="engine WebGL no estilo ASCII denso">▶ Engine</a>
+    <button id="btnStarter" title="adiciona os assets e o mapa demo">+ Starter pack</button>
+    <button id="btnNew" class="danger">Novo projeto</button>
+    <span id="saveState" class="hint"></span>
+  </div>
+</header>
+<main>
+  <aside class="sidebar">
+    <div class="side-actions">
+      <button id="btnGen" class="primary" title="céu, montanhas, floresta, texturas">✦ Gerar cenário</button>
+      <button id="btnDupAsset" title="duplicar asset">⧉</button>
+      <button id="btnDelAsset" class="danger" title="apagar asset">✕</button>
+    </div>
+    <div id="assetList"></div>
+    <div id="mapList"></div>
+  </aside>
+  <section id="view-editor" class="view"></section>
+  <section id="view-convert" class="view"></section>
+  <section id="view-map" class="view"></section>
+  <section id="view-export" class="view"></section>
+</main>
+<div id="genDlg" class="overlay"></div>
+<div id="toast"></div>
+<script src="js/core.js"></script>
+<script src="js/converter.js"></script>
+<script src="js/map.js"></script>
+<script src="js/editor.js"></script>
+<script src="js/presets.js"></script>
+<script src="js/convertui.js"></script>
+<script src="js/export.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

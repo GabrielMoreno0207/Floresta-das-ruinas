@@ -1,0 +1,11 @@
+"AppBuild"
+{
+	"AppID" "480"
+	"Desc" "Build automatica da ASCII Engine"
+	"ContentRoot" "..\dist\win-unpacked\"
+	"BuildOutput" ".\output\"
+	"Depots"
+	{
+		"481" "depot_build.vdf"
+	}
+}

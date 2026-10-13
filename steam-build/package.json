@@ -1,0 +1,58 @@
+{
+  "name": "ascii-engine-game",
+  "productName": "Floresta das Ruinas",
+  "version": "1.0.2",
+  "description": "Jogo de plataforma em ASCII feito com a ASCII Engine",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "prepare-app": "node prepare.js",
+    "start": "npm run prepare-app && electron .",
+    "dist": "npm run prepare-app && electron-builder --win --dir",
+    "dist:zip": "npm run prepare-app && electron-builder --win zip",
+    "dist:linux": "npm run prepare-app && electron-builder --linux --dir",
+    "dist:mac": "npm run prepare-app && electron-builder --mac --dir"
+  },
+  "devDependencies": {
+    "electron": "33.2.1",
+    "electron-builder": "25.1.8"
+  },
+  "optionalDependencies": {
+    "steamworks.js": "0.4.0"
+  },
+  "build": {
+    "appId": "com.seuestudio.florestadasruinas",
+    "productName": "Floresta das Ruinas",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "app/**/*",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/steamworks.js/**/*"
+    ],
+    "extraFiles": [
+      {
+        "from": "steam_appid.txt",
+        "to": "steam_appid.txt"
+      }
+    ],
+    "win": {
+      "target": "dir",
+      "icon": "build/icon.png",
+      "signAndEditExecutable": false
+    },
+    "linux": {
+      "target": "dir",
+      "category": "Game"
+    },
+    "mac": {
+      "target": "dir",
+      "category": "public.app-category.games"
+    }
+  }
+}

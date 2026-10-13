@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Floresta das Ruínas — Engine</title>
+<style>
+  :root { --bg:#05060c; --panel:rgba(14,16,26,.95); --line:#262a3a; --text:#d8dbe6; --dim:#7d8399; --acc:#ffd23f; --mono:'Cascadia Mono',Consolas,monospace; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--text); font:12px/1.35 system-ui,'Segoe UI',sans-serif; overflow:hidden; }
+  #view, #overlay { position:fixed; left:0; top:0; width:100%; height:100%; display:block; }
+  #overlay { pointer-events:none; }
+  body.editing #view, body.editing #overlay { width:calc(100% - 360px); }
+  body.editing #overlay { pointer-events:auto; cursor:crosshair; }
+  #hud { position:fixed; left:10px; bottom:6px; color:#6d7489; font:11px var(--mono); pointer-events:none; text-shadow:0 0 4px #000; }
+  #help { position:fixed; right:10px; bottom:6px; color:#5d6479; font:11px var(--mono); pointer-events:none; text-align:right; }
+  #help b { color:#a8aec0; font-weight:normal; }
+  body.editing #help, body.editing #ui { display:none; }
+  #toast { position:fixed; top:14px; left:50%; transform:translateX(-50%); background:var(--panel); border:1px solid var(--line); padding:7px 14px; border-radius:8px; opacity:0; transition:.25s; pointer-events:none; z-index:20; }
+  #toast.show { opacity:1; }
+  /* interface do jogo (ASCII) */
+  #ui { position:fixed; inset:0; pointer-events:none; }
+  pre.ascii { margin:0; font:14px/1.15 var(--mono); color:#d8dbe6; white-space:pre; text-shadow:0 0 6px rgba(0,0,0,.9); }
+  pre.ascii .fr { color:#5c6378; } pre.ascii .tt { color:#f0ead8; } pre.ascii .acc { color:var(--acc); } pre.ascii .hp { color:#ff4a50; text-shadow:0 0 8px #ff2030; }
+  pre.ascii .btn { color:var(--acc); cursor:pointer; pointer-events:auto; } pre.ascii .mi { cursor:pointer; }
+  #uiTop { position:absolute; left:12px; top:10px; }
+  #uiHot { position:absolute; left:50%; bottom:30px; transform:translateX(-50%); pointer-events:auto; cursor:pointer; }
+  #uiMsg { position:absolute; left:50%; top:16%; transform:translateX(-50%); background:rgba(4,5,10,.72); opacity:0; transition:opacity .4s; }
+  #uiMsg.show { opacity:1; }
+  #uiFeed { position:absolute; right:16px; top:12px; text-align:right; }
+  #uiFps { position:absolute; right:16px; bottom:8px; color:#6d7489; }
+  #uiInv { position:absolute; inset:0; background:rgba(0,0,0,.6); display:none; place-items:center; pointer-events:auto; }
+  #uiInv.open { display:grid; } #invBox { background:rgba(6,7,13,.94); padding:6px; cursor:default; font-size:15px; }
+  #uiBubbles pre.bubble { position:fixed; transform:translate(-50%,-100%); pointer-events:none; white-space:pre; }
+  #uiBubbles pre.say { font-size:15px; background:rgba(6,7,13,.82); padding:2px 4px; }
+  #uiBubbles pre.tag { font-size:13px; background:rgba(6,7,13,.7); padding:1px 5px; }
+  #uiHot { font-size:17px; }
+  #invBox [data-i] { cursor:pointer; }
+  #uiBoss { position:absolute; top:70px; left:50%; transform:translateX(-50%); font-size:15px; text-align:center; background:rgba(6,7,13,.7); padding:3px 10px; display:none; pointer-events:none; }
+  #uiShop { position:absolute; inset:0; background:rgba(0,0,0,.6); display:none; place-items:center; pointer-events:auto; }
+  #uiShop.open { display:grid; } #shopBox { background:rgba(6,7,13,.94); padding:6px; cursor:default; font-size:14px; } #shopBox [data-s] { cursor:pointer; }
+  #uiMap { position:absolute; inset:0; display:none; place-items:center; background:rgba(0,0,0,.65); pointer-events:auto; }
+  #uiMap.open { display:grid; } #uiMap pre { font-size:11px; line-height:1.05; background:rgba(6,7,13,.94); padding:4px; }
+  #creative { position:fixed; left:12px; top:50%; transform:translateY(-50%); display:none; background:rgba(6,7,13,.85); z-index:15; }
+  #creative.open { display:block; } #creative .mi { cursor:pointer; }
+  body.creative #overlay { cursor:crosshair; }
+  #toast { font-family:var(--mono) !important; border-radius:0 !important; background:rgba(6,7,13,.9) !important; }
+  /* editor */
+  #panel { position:fixed; right:0; top:0; bottom:0; width:360px; box-sizing:border-box; background:var(--panel); border-left:1px solid var(--line); padding:8px 10px; overflow-y:auto; display:none; }
+  body.editing #panel { display:block; }
+  #panel * { box-sizing:border-box; }
+  .ed-head small { color:var(--dim); }
+  .tabs { display:grid; grid-template-columns:repeat(4,1fr); gap:3px; margin:6px 0 8px; }
+  .tabs button { padding:5px 2px; }
+  #panel h4 { margin:12px 0 5px; font-size:10px; text-transform:uppercase; letter-spacing:.1em; color:var(--dim); }
+  #panel label { display:block; margin:5px 0; color:var(--dim); }
+  #panel label > input:not([type=checkbox]), #panel label > select, #panel label > textarea { display:block; width:100%; margin-top:2px; }
+  #panel label.chk { color:var(--text); }
+  #panel input[type=range] { accent-color:var(--acc); }
+  #panel textarea { font:11px/1.4 var(--mono); background:#0a0b12; color:#cfe3c8; border:1px solid var(--line); border-radius:5px; padding:6px; resize:vertical; tab-size:2; }
+  #panel textarea.bad { border-color:#ff5a4f; }
+  #panel select[size] { height:auto; }
+  button, select, input { font:inherit; color:var(--text); background:#1a1d2a; border:1px solid var(--line); border-radius:5px; padding:3px 7px; }
+  button { cursor:pointer; } button:hover { border-color:#3a4058; }
+  button.on { border-color:var(--acc); color:var(--acc); }
+  button.primary { background:#2a3a66; border-color:#3f5aa0; }
+  button.danger:hover, button[data-armed] { border-color:#ff5a4f; color:#ff5a4f; }
+  .tools { display:flex; flex-wrap:wrap; gap:3px; }
+  .mats, .places { display:grid; grid-template-columns:1fr 1fr; gap:3px; }
+  .mat { display:flex; gap:6px; align-items:center; text-align:left; font-size:11px; border-left:4px solid var(--c); padding:3px 5px; }
+  .mat b { font-family:var(--mono); color:var(--c); width:12px; }
+  .places button { text-align:left; font-size:11px; }
+  .cols { display:flex; flex-direction:column; gap:3px; } .cols button { text-align:left; border-left:6px solid var(--c); }
+  .row { display:flex; gap:4px; margin:5px 0; flex-wrap:wrap; align-items:center; }
+  .list { max-height:170px; overflow-y:auto; border:1px solid var(--line); border-radius:6px; }
+  .list > div { padding:4px 7px; cursor:pointer; border-bottom:1px solid #1a1d2a; } .list > div:hover { background:#1a1d2a; } .list > div.on { background:#252a3c; color:var(--acc); }
+  .list small { color:var(--dim); }
+  .hint { color:var(--dim); font-size:11px; margin:5px 0; }
+  .file { display:inline-block; cursor:pointer; color:var(--acc) !important; }
+  .file.btn { background:#1a1d2a; border:1px solid var(--line); border-radius:5px; padding:3px 7px; margin:0; color:var(--text) !important; }
+  .errors { color:#ff8a7a; font:11px var(--mono); margin-top:8px; white-space:pre-wrap; }
+  .api { font:10.5px/1.45 var(--mono); background:#0a0b12; border:1px solid var(--line); border-radius:6px; padding:8px; white-space:pre-wrap; color:#b8c4e0; }
+  #menu { position:fixed; inset:0; display:none; place-items:center; background:rgba(2,3,8,.6); z-index:30; }
+  #menu.open { display:grid; } #menu.title { background:none; place-items:end end; padding:0 5vw 9vh 0; }
+  #menu.title .menu-box { background:rgba(6,7,13,.78); box-shadow:0 0 40px rgba(255,120,40,.12); }
+  #titleArt { position:fixed; inset:0; z-index:29; display:none; pointer-events:none; background:#030305; }
+  #menu .menu-box { background:rgba(6,7,13,.9); padding:6px 8px; font-size:15px; }
+  body.game-mode #help, body.game-mode #hud { display:none; }
+  #icCv { display:block; width:100%; background:#000; border-radius:6px; margin:6px 0; cursor:crosshair; touch-action:none; }
+  .glyphs { display:grid; grid-template-columns:repeat(14,1fr); gap:2px; }
+  .glyphs button { padding:2px 0; font:13px var(--mono); }
+  .sw { display:flex; flex-wrap:wrap; gap:3px; } .sw i { width:16px; height:16px; border-radius:3px; cursor:pointer; display:inline-block; }
+  .previews { display:flex; gap:10px; align-items:flex-start; } .previews pre.ascii { font-size:12px; } #icPrevWorld { display:block; margin-top:6px; border-radius:4px; }
+  #pfPrev { display:block; width:100%; background:#000; border-radius:6px; margin:6px 0; }
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+<canvas id="overlay"></canvas>
+<div id="ui"></div>
+<div id="hud"></div>
+<div id="help"><b>←→</b> andar · <b>Espaço</b> pular/duplo · <b>↓+Espaço</b> descer plataforma · <b>Shift</b> dash · <b>J</b> combo · <b>E</b> interagir · <b>Q</b> bomba · <b>1-5</b> hotbar · <b>I</b> inventário · <b>M</b> mapa · <b>F2</b> colisores · <b>C</b> criativo · <b>Tab</b> editor · <b>Esc</b> pausa</div>
+<div id="panel"></div>
+<div id="menu"></div>
+<div id="creative"></div>
+<div id="toast"></div>
+<script src="js/materials.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/renderer.js"></script>
+<script src="js/world.js"></script>
+<script src="js/physics.js"></script>
+<script src="js/fx.js"></script>
+<script src="js/items.js"></script>
+<script src="js/script.js"></script>
+<script src="js/entities.js"></script>
+<script src="js/sprites.js"></script>
+<script src="js/player.js"></script>
+<script src="js/project.js"></script>
+<script src="js/game.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/overlay.js"></script>
+<script src="js/build.js"></script>
+<script src="js/editor.js"></script>
+<script src="js/menu.js"></script>
+<script src="js/title.js"></script>
+<script src="js/creative.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
