@@ -1,11 +1,12 @@
 'use strict';
-// Áudio 100% sintetizado (WebAudio): efeitos, ambiente e música generativa. Nenhum arquivo de som é necessário.
+// Áudio: efeitos e ambiente sintetizados (WebAudio) e música em arquivo (audio/musica.mp3 e audio/chefe.mp3,
+// com troca suave quando um chefe desperta). Sem os arquivos, a música generativa toca no lugar.
 (function () {
   const E = window.ENG;
   const OPT_KEY = 'asciiengine.options';
 
   E.Options = Object.assign(
-    { master: 0.8, music: 0.5, sfx: 0.8, shake: true, fps: false, creative: true },
+    { master: 0.8, music: 0.5, sfx: 0.8, shake: true, fps: false, creative: true, outline: true, filter: 0, grade: 1 },
     (() => {
       try {
         return JSON.parse(localStorage.getItem(OPT_KEY) || '{}');
@@ -66,6 +67,7 @@
       else if (this.ctx.state === 'suspended') this.ctx.resume();
     },
     applyVolumes() {
+      this.trackVolumes();
       if (!this.ctx) return;
       const o = E.Options, t = this.ctx.currentTime;
       this.master.gain.setTargetAtTime(o.master, t, 0.05);
@@ -205,6 +207,11 @@
       },
       magia(a, o) {
         [660, 880, 1100, 1320, 1760].forEach((f, i) => a.tone(o, 'sine', f, f * 1.01, 0.3, 0.06, i * 0.04));
+      },
+      gelo(a, o) {
+        // cristal se partindo: estalo agudo + tilintar
+        a.noise(o, 'highpass', 5000, 3000, 0.08, 0.22);
+        [2100, 2800, 3500].forEach((f, i) => a.tone(o, 'sine', f, f * 0.98, 0.25, 0.05, i * 0.03));
       },
       tiro(a, o) {
         a.tone(o, 'triangle', 900, 300, 0.15, 0.13);
@@ -400,10 +407,11 @@
     },
     // chamado todo quadro pelo jogo
     tick(dt) {
+      if (this.tracks) this.tickTracks(Math.min(0.1, dt || 0));
       if (!this.ready || this.ctx.state !== 'running') return;
       const G = E.Game, w = G.world, p = G.player;
       if (!w || !p) return;
-      const cave = w.settings.sky === 'Caverna';
+      const cave = w.inCave(p.x, p.y - 4);
       const sky = w.skyAt(Math.floor(p.x), Math.floor(p.y - 4)) / 255;
       const t = this.ctx.currentTime;
       this.windGain.gain.setTargetAtTime(0.06 * sky + (cave ? 0.015 : 0), t, 0.5);
@@ -431,8 +439,61 @@
       if (nearFire > 0 && Math.random() < 0.8) this.noise(o(Math.random() - 0.5, nearFire * 0.3, 0.05), 'highpass', 2000 + Math.random() * 3000, 1500, 0.02 + Math.random() * 0.03, 1);
     },
 
-    // ---------- música generativa ----------
+    // ---------- música em arquivo: faixa padrão e faixa de chefe, com troca suave ----------
+    // (elemento <audio> com volume controlado aqui: funciona no navegador e na build, inclusive em file://)
+    tracks: null,
+    startTracks() {
+      if (this.tracks) return;
+      const mk = (src) => {
+        const a = new window.Audio();
+        a.src = src;
+        a.loop = true;
+        a.preload = 'auto';
+        a.volume = 0;
+        a.addEventListener('error', () => (a.failed = true));
+        return a;
+      };
+      this.tracks = { normal: mk('audio/musica.mp3'), chefe: mk('audio/chefe.mp3'), mix: 0, vol: { normal: 0, chefe: 0 } };
+      this.tracks.normal.play().catch(() => {});
+    },
+    // volume real de cada faixa = geral × música × posição da troca (mix: 0 = padrão, 1 = chefe)
+    trackVolumes() {
+      const T = this.tracks;
+      if (!T) return;
+      const o = E.Options, base = Math.max(0, Math.min(1, o.master * o.music * 1.2));
+      const set = (a, k, v) => {
+        T.vol[k] = v;
+        a.volume = Math.max(0, Math.min(1, base * v));
+      };
+      set(T.normal, 'normal', 1 - T.mix);
+      set(T.chefe, 'chefe', T.mix);
+    },
+    tickTracks(dt) {
+      const T = this.tracks;
+      if (!T) return;
+      // chefe acordado (como a barra de vida do chefe) = toca a música de chefe
+      const boss = E.Ents && E.Ents.list && E.Ents.list.some((e) => e.kind === 'creature' && e.def && e.def.boss && e.vars && e.vars.awake && !e.dead);
+      const want = boss && !T.chefe.failed ? 1 : 0;
+      if (want && T.mix === 0) {
+        T.chefe.currentTime = 0; // a luta começa do início da faixa
+        T.chefe.play().catch(() => {});
+      }
+      if (!want && T.mix === 1 && !T.normal.failed) T.normal.play().catch(() => {});
+      if (want > T.mix) T.mix = Math.min(1, T.mix + dt / 1.2); // entra em ~1,2 s
+      else if (want < T.mix) T.mix = Math.max(0, T.mix - dt / 2); // volta em ~2 s
+      if (T.mix >= 1 && !T.normal.paused) T.normal.pause();
+      if (T.mix <= 0 && !T.chefe.paused) T.chefe.pause();
+      if (T.mix < 1 && T.normal.paused && !T.normal.failed) T.normal.play().catch(() => {});
+      this.trackVolumes();
+    },
+    // as faixas tocam se ao menos a padrão carregou; senão fica a música generativa
+    get useTracks() {
+      return !!(this.tracks && !this.tracks.normal.failed);
+    },
+
+    // ---------- música generativa (reserva, sem os arquivos de música) ----------
     startMusic() {
+      this.startTracks();
       const c = this.ctx;
       this.musicFilter = c.createBiquadFilter();
       this.musicFilter.type = 'lowpass';
@@ -448,9 +509,9 @@
       setInterval(() => this.musicStep(), 200);
     },
     musicStep() {
-      if (!this.ready || this.ctx.state !== 'running') return;
+      if (!this.ready || this.ctx.state !== 'running' || this.useTracks) return;
       const c = this.ctx, t = c.currentTime;
-      const cave = E.Game.world && E.Game.world.settings.sky === 'Caverna';
+      const cave = E.Game.world && E.Game.player && E.Game.world.inCave(E.Game.player.x, E.Game.player.y - 4);
       // progressão menor e lenta; na caverna, mais grave e escura
       const prog = cave ? [[45, 52, 57, 60], [41, 48, 53, 57], [43, 50, 55, 58], [40, 47, 52, 55]] : [[57, 64, 69, 72], [53, 60, 65, 69], [48, 55, 60, 64], [55, 62, 67, 71]];
       const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12);

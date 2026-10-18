@@ -17,6 +17,36 @@
         cv.height = r.canvas.height;
       }
       ctx.clearRect(0, 0, cv.width, cv.height);
+      // trajetória da flecha enquanto o arco é puxado: caracteres ASCII na grade do jogo, tracejados, com o traço
+      // virado para a direção da curva (- \ | /); desenhados por cima, sem esconder o cenário
+      const pl = G().player;
+      if (pl && pl.bow && pl.aimPath && pl.aimPath.length && !(E.Editor && E.Editor.active)) {
+        const rr = E.Renderer, cx0 = G().cam.x, cy0 = G().cam.y, asp = rr.ch / rr.cw;
+        ctx.save();
+        ctx.font = `bold ${Math.round(rr.ch * 0.95)}px 'Cascadia Mono','Consolas','DejaVu Sans Mono',monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.shadowColor = 'rgba(255,200,110,0.85)';
+        ctx.shadowBlur = rr.cw * 0.9;
+        const path = pl.aimPath;
+        let lastCell = '', n = 0;
+        for (let i = 0; i < path.length; i++) {
+          const q = path[i], cx = Math.floor(q.x), cy = Math.floor(q.y), key = cx + ',' + cy;
+          if (key === lastCell) continue;
+          lastCell = key;
+          if (n++ % 3 === 2) continue; // tracejado: 2 traços, 1 vazio
+          const nx = path[Math.min(path.length - 1, i + 1)], pv = path[Math.max(0, i - 1)];
+          const an = ((Math.atan2((nx.y - pv.y) * asp, nx.x - pv.x) % Math.PI) + Math.PI) % Math.PI;
+          const ch = an < 0.39 || an > 2.75 ? '-' : an < 1.18 ? '\\' : an < 1.96 ? '|' : '/';
+          ctx.fillStyle = `rgb(${q.c.map((v) => Math.round(Math.min(255, v))).join(',')})`;
+          ctx.fillText(ch, (cx + 0.5 - cx0) * rr.cw, (cy + 0.5 - cy0) * rr.ch);
+        }
+        // ponta: onde a flecha cai/acerta
+        const end = path[path.length - 1];
+        ctx.fillStyle = 'rgb(255,235,160)';
+        ctx.fillText('x', (Math.floor(end.x) + 0.5 - cx0) * rr.cw, (Math.floor(end.y) + 0.5 - cy0) * rr.ch);
+        ctx.restore();
+      }
       const cre = E.Creative && E.Creative.active;
       if (!ed && !G().showColliders && !cre) return;
       const cw = r.cw, ch = r.ch;

@@ -63,6 +63,22 @@
   };
 
   // ---------- helpers de desenho ----------
+  // marca: fixa um caractere exato numa célula do sprite (olho, fivela, barba, coroa...).
+  // x,y em pixels do canvas, antes do espelhamento; sem cor, usa a cor que a célula já tem
+  const mark = (ctx, x, y, ch, col) => (ctx.canvas.marks ||= []).push([x, y, ch, col]);
+  const MIRROR = { '/': '\\', '\\': '/', '(': ')', ')': '(', '[': ']', ']': '[', '{': '}', '}': '{', '<': '>', '>': '<' };
+  const hexRgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const applyMarks = (c, cv, flip) => {
+    const cw = cv.width / c.w, chh = cv.height / c.h;
+    for (const [mx, my, ch, col] of cv.marks || []) {
+      const X = Math.floor((flip ? cv.width - mx : mx) / cw), Y = Math.floor(my / chh);
+      if (X < 0 || Y < 0 || X >= c.w || Y >= c.h) continue;
+      const i = Y * c.w + X, old = c.cells[i];
+      const rgb = col ? (typeof col === 'string' ? hexRgb(col) : col) : old;
+      if (!rgb) continue;
+      c.cells[i] = [rgb[0], rgb[1], rgb[2], E.glyphIndex(flip ? MIRROR[ch] || ch : ch)];
+    }
+  };
   const limb = (ctx, pts, w, col) => {
     ctx.strokeStyle = col;
     ctx.lineWidth = w;
@@ -689,7 +705,7 @@
       stroke(pts, COL.leather, LW * 1.1);
       stroke([pts[0], pts[8]], '#e8e0c8', LW * 0.5);
       tip = at2(S * 1.5, 0);
-    } else {
+    } else if (shape !== 'mao') {
       const base = at2(S * 0.9, 0);
       const bw = S * (shape === 'adaga' ? 0.35 : 0.45);
       const e1 = [base[0] + nx * bw, base[1] + ny * bw], e2 = [base[0] - nx * bw, base[1] - ny * bw];
@@ -1021,27 +1037,283 @@
     }
     return out.length ? out : [0];
   };
-  const drawImageFrame = (ctx, W, H, img, def, anim, t) => {
+
+  // ---------- herói em pixel art: veste o manequim e colore a arma em tempo real ----------
+  // A folha `parts` diz a parte de cada pixel (R/20); `meta` traz mãos, pescoço, cabeça e a flecha encaixada.
+  // O resultado é um quadro pequeno em pixels, que depois vira ASCII como qualquer imagem do jogo.
+  const sheetData = new Map();
+  const sheetPixels = (src) => {
+    let d = sheetData.get(src);
+    if (d) return d;
+    const im = getImage(src);
+    if (!im) return null;
+    const cv = document.createElement('canvas');
+    cv.width = im.naturalWidth;
+    cv.height = im.naturalHeight;
+    const cx = cv.getContext('2d', { willReadFrequently: true });
+    cx.drawImage(im, 0, 0);
+    d = { w: cv.width, data: cx.getImageData(0, 0, cv.width, cv.height).data };
+    sheetData.set(src, d);
+    return d;
+  };
+  const heroFrames = new Map();
+  const HP = {
+    // tons claros de propósito: no ASCII o brilho decide a densidade do caractere (escuro vira ':' ralo)
+    skin: [245, 196, 156], hair: [150, 96, 52], tunic: [86, 146, 214], pants: [150, 112, 82], boot: [128, 86, 54], belt: [170, 112, 60],
+    metal: { ferro: [200, 206, 220], ouro: [246, 204, 92] },
+    cape: { rubra: [220, 64, 64], gelo: [140, 200, 245], verde: [96, 178, 92], sombra: [140, 96, 190] },
+    boots: { couro: [168, 112, 64], ferro: [196, 202, 216], aladas: [236, 240, 250] },
+    hood: [128, 84, 168], wood: [190, 128, 66], staff: [170, 116, 64], hilt: [160, 108, 56], guard: [230, 186, 80], steel: [220, 230, 245],
+    string: [225, 220, 205], fletch: [200, 70, 60], strap: [130, 86, 44],
+  };
+  const REF = { 1: 129, 2: 161, 3: 223, 4: 223, 6: 255, 7: 231 };
+  // o: { look (aparência das armaduras), weapon (definição da arma), cape ('idle' | 'run' | 'air'), wave (fase da capa) }
+  E.heroPixels = (img, f, o = {}) => {
+    const L = o.look || {}, wpn = o.weapon || {};
+    const key = f + '|' + JSON.stringify(L) + '|' + (wpn.shape || '') + (wpn.color || '') + (wpn.tint || '') + (wpn.unarmed ? 'u' : '') + (wpn.elem || '') + '|' + (o.cape || '') + '|' + (o.wave || 0) + '|' + (o.pose || '') + (o.step || 0) + '|' + (o.legsF ?? '');
+    let cv = heroFrames.get(key);
+    if (cv) return cv;
+    const C = sheetPixels(img.src), P = sheetPixels(img.parts);
+    let M = img.meta && img.meta[f];
+    if (!C || !P || !M) return null;
+    const FW = img.fw, FH = img.fh;
+    const N = FW * FH, part = new Uint8Array(N), gray = new Uint8Array(N), out = new Uint8ClampedArray(N * 4);
+    const pm = new Uint8Array(N); // partes do quadro pintado (inclui 12 capa, 13 flecha, 14 detalhes) — usado pelo herói 3D
+    // lê partes e tons de cinza de um quadro da folha
+    const load = (fi, pa, gr) => {
+      const ox = (fi % img.cols) * FW, oy = Math.floor(fi / img.cols) * FH;
+      for (let y = 0; y < FH; y++)
+        for (let x = 0; x < FW; x++) {
+          const si = ((oy + y) * C.w + ox + x) * 4;
+          if (!C.data[si + 3]) continue;
+          pa[y * FW + x] = Math.round(P.data[si] / 20) || 3;
+          gr[y * FW + x] = C.data[si];
+        }
+    };
+    // ao tirar o braço da frente, o tronco que ele cobria fica furado: preenche com o tronco da mesma linha
+    const patchTorso = (removed) => {
+      for (const i of removed) {
+        const y = (i / FW) | 0, x = i % FW;
+        let l = -1, r = -1;
+        for (let k = 1; k < 6 && (l < 0 || r < 0); k++) {
+          if (l < 0 && x - k >= 0 && part[y * FW + x - k] === 3) l = y * FW + x - k;
+          if (r < 0 && x + k < FW && part[y * FW + x + k] === 3) r = y * FW + x + k;
+        }
+        if (l >= 0 && r >= 0) (part[i] = 3), (gray[i] = (gray[l] + gray[r]) >> 1);
+      }
+    };
+    let HF = M.h, HB = M.b; // mãos da frente e de trás (para pintar a pele)
+    const ARMS = [1, 6, 8, 9];
+    if (o.legsF != null && img.meta[o.legsF]) {
+      // mirando andando/pulando: o corpo inteiro (cabeça, tronco e pernas) vem do quadro de movimento e só
+      // braços, arco e corda vêm do quadro de mira, presos no ombro (deslocados pelo pescoço) — nada se separa
+      const ML = img.meta[o.legsF], ap = new Uint8Array(N), ag = new Uint8Array(N);
+      load(o.legsF, part, gray);
+      load(f, ap, ag);
+      const dx = ML.n[0] - M.n[0], dy = ML.n[1] - M.n[1], removed = [];
+      for (let i = 0; i < N; i++) if (ARMS.includes(part[i])) (part[i] === 6 && removed.push(i)), (part[i] = 0);
+      patchTorso(removed);
+      for (const layer of [1, 3]) // braço de trás só atrás do corpo; depois braço da frente, arco e corda por cima
+        for (let i = 0; i < N; i++) {
+          const pp = ap[i];
+          if (!ARMS.includes(pp) || (layer === 1) !== (pp === 1)) continue;
+          const X = (i % FW) + dx, Y = ((i / FW) | 0) + dy;
+          if (X < 0 || Y < 0 || X >= FW || Y >= FH) continue;
+          const j = Y * FW + X;
+          if (part[j] === 7 || (pp === 1 && part[j])) continue;
+          part[j] = pp;
+          gray[j] = ag[i];
+        }
+      HF = [M.h[0] + dx, M.h[1] + dy];
+      HB = [M.b[0] + dx, M.b[1] + dy];
+      M = Object.assign({}, ML, { h: HF, b: HB, arrow: M.arrow ? [M.arrow[0] + dx, M.arrow[1] + dx, M.arrow[2] + dy] : null });
+    } else load(f, part, gray);
+    // escalada: braços redesenhados como membros grossos do ombro até a mão no degrau (um alto, outro mais baixo),
+    // perna do lado do braço alto sobe um degrau; os lados alternam. A arma não aparece
+    if (o.pose === 'climb') {
+      const s = (o.step || 0) % 4;
+      // mão relativa ao ombro (x para a frente, y para baixo): alto, médio
+      const HIGH = [1, -10], MID = [3, -6], LOW = [3, 1];
+      const target = [[HIGH, LOW], [MID, MID], [LOW, HIGH], [MID, MID]][s], lift = [[3, 0], [1, 1], [0, 3], [1, 1]][s];
+      const src = part.slice(), sg = gray.slice(), removed = [], tone = { 6: 0, 1: 0 }, cnt = { 6: 0, 1: 0 };
+      for (let i = 0; i < N; i++) if (src[i] === 6 || src[i] === 1) (tone[src[i]] += sg[i]), cnt[src[i]]++;
+      for (let i = 0; i < N; i++) if ([1, 2, 4, 6, 8, 9].includes(src[i])) (src[i] === 6 && removed.push(i)), (part[i] = 0);
+      patchTorso(removed);
+      for (let i = 0; i < N; i++) {
+        const pp = src[i];
+        if (pp !== 2 && pp !== 4) continue;
+        const Y = ((i / FW) | 0) - lift[pp === 4 ? 0 : 1], j = Y * FW + (i % FW);
+        if (Y >= 0 && !part[j]) (part[j] = pp), (gray[j] = sg[i]);
+      }
+      // ombros logo abaixo do pescoço; o de trás um pixel mais para trás
+      const sh = { 6: [M.n[0] + 1, M.n[1] + 2], 1: [M.n[0] - 1, M.n[1] + 2] };
+      const limb = (pp, t) => {
+        const [sx, sy] = sh[pp], hx = sx + t[0], hy = sy + t[1], g = cnt[pp] ? Math.round(tone[pp] / cnt[pp]) : 150;
+        // cotovelo dobrado para fora (para trás) dá forma de braço, não de vara
+        const ex = sx + t[0] * 0.5 - 1.5, ey = sy + t[1] * 0.5;
+        const seg = (ax, ay, bx, by) => {
+          const n = Math.ceil(Math.max(Math.abs(bx - ax), Math.abs(by - ay)) * 2) + 1;
+          for (let k = 0; k <= n; k++) {
+            const x = Math.round(ax + ((bx - ax) * k) / n), y = Math.round(ay + ((by - ay) * k) / n);
+            for (const [ox, oy] of [[0, 0], [1, 0]]) {
+              const X = x + ox, Y = y + oy;
+              if (X < 0 || Y < 0 || X >= FW || Y >= FH) continue;
+              const j = Y * FW + X;
+              if (part[j] === 7 || (pp === 1 && part[j])) continue;
+              part[j] = pp;
+              gray[j] = g;
+            }
+          }
+        };
+        seg(sx, sy, ex, ey);
+        seg(ex, ey, hx, hy);
+        return [hx + 0.5, hy];
+      };
+      HB = limb(1, target[1]);
+      HF = limb(6, target[0]);
+    }
+    let wy0 = 99, wy1 = -1;
+    for (let i = 0; i < N; i++) if (part[i] === 8) (wy0 = Math.min(wy0, (i / FW) | 0)), (wy1 = Math.max(wy1, (i / FW) | 0));
+    // desarmado: some a arma (os golpes viram socos)
+    if (wpn.unarmed) for (let i = 0; i < N; i++) if (part[i] === 8 || part[i] === 5) part[i] = 0; // arma e rastro da lâmina
+    const put = (i, c, a = 255) => {
+      out[i * 4] = c[0];
+      out[i * 4 + 1] = c[1];
+      out[i * 4 + 2] = c[2];
+      out[i * 4 + 3] = a;
+    };
+    const k = (c, m) => [c[0] * m, c[1] * m, c[2] * m];
+    const mixc = (a, b, t) => a.map((v, j) => v + (b[j] - v) * t);
+    const wc = (wpn.color || [0.8, 0.85, 0.95]).map((v) => v * 255);
+    const metal = HP.metal[L.chest] || HP.metal.ferro, hm = HP.metal[L.helmet] || HP.metal.ferro;
+    const [hx0, hy0, hx1] = M.hd, d2 = (x, y, q) => (x - q[0]) ** 2 + (y - q[1]) ** 2;
+    // capa: atrás do corpo (só onde não há pixel), presa no pescoço e solta conforme o movimento
+    if (L.cloak) {
+      const cc = HP.cape[L.cloak] || HP.cape.rubra, trail = o.cape === 'run' ? 7 : o.cape === 'air' ? 4 : 1.5;
+      const top = M.n[1] + 1, bot = Math.min(FH - 3, M.hip + (o.cape === 'air' ? 4 : 8));
+      for (let y = top; y <= bot; y++) {
+        const t = (y - top) / Math.max(1, bot - top), cx = M.n[0] - 1 - trail * t * t - Math.sin(t * 5 + (o.wave || 0)) * 0.9 * t, hw = 0.8 + 2.4 * t;
+        for (let x = Math.round(cx - hw); x <= Math.round(cx + hw); x++) {
+          if (x < 0 || x >= FW) continue;
+          const i = y * FW + x;
+          if (!part[i]) put(i, k(cc, 0.7 + 0.3 * ((x - (cx - hw)) / (2 * hw)))), (pm[i] = 12);
+        }
+      }
+    }
+    for (let i = 0; i < N; i++) {
+      const p = part[i];
+      if (!p) continue;
+      const x = i % FW, y = (i / FW) | 0, sh = Math.max(0.55, Math.min(1.2, gray[i] / (REF[p] || gray[i] || 1)));
+      let c;
+      if (p === 7) {
+        // cabeça: cabelo, elmo ou capuz por cima; olho na frente (o herói olha para a direita)
+        const rel = y - hy0, back = x <= hx0;
+        if (L.helmet) c = rel <= 1 || x <= hx0 + 1 ? hm : x === hx1 && rel === 2 ? [45, 30, 30] : HP.skin;
+        else if (L.hood) c = rel <= 1 || back ? HP.hood : k(HP.skin, 0.8);
+        else c = rel === 0 || (back && rel <= 2) ? HP.hair : rel === 2 && x === hx1 ? [45, 30, 30] : HP.skin;
+      } else if (p === 3) c = k(y >= M.hip - 1 ? (L.chest ? k(metal, 0.7) : HP.belt) : L.chest ? metal : HP.tunic, sh);
+      else if (p === 6 || p === 1) {
+        const hand = d2(x, y, p === 6 ? HF : HB) <= 2.3;
+        c = hand ? (L.chest ? metal : HP.skin) : L.chest && y <= M.n[1] + 2 ? k(metal, 1.1) : L.chest ? k(metal, 0.9) : k(HP.tunic, 0.9);
+        if (p === 1) c = k(c, 0.72);
+      } else if (p === 4 || p === 2) {
+        c = y >= FH - 4 ? HP.boots[L.boots] || HP.boot : HP.pants;
+        if (p === 2) c = k(c, 0.72);
+      } else if (p === 5) {
+        // rastro do golpe desenhado no sprite: recebe a paleta do elemento da arma (fio claro na borda, cor da lâmina dentro)
+        const pal = E.FX.pal(wpn.elem || (wpn.shape ? null : 'aco'), wpn.color || [0.8, 0.85, 0.95]);
+        let open = 0;
+        for (const [ddx, ddy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (part[(y + ddy) * FW + x + ddx] !== 5) open++;
+        c = (open >= 2 ? pal[0] : pal[1]).map((v) => Math.round(v * 255));
+      }
+      else if (p === 8) {
+        // a arma desenhada no arquivo (silhueta preta), colorida conforme o tipo
+        if (wpn.shape === 'arco') c = y === wy0 || y === wy1 ? k(HP.wood, 1.3) : HP.wood;
+        else if (wpn.shape === 'cajado') c = y <= wy0 + 1 ? wc : HP.staff;
+        else if (d2(x, y, M.h) <= 4 || d2(x, y, M.b) <= 4) c = wpn.elem === 'luz' ? HP.guard : HP.hilt;
+        else {
+          // lâmina: aço tingido pela cor da arma (encantadas bem mais fortes); o fio de cima fica mais claro
+          const edge = !part[(y - 1) * FW + x] || part[(y - 1) * FW + x] !== 8;
+          c = mixc(HP.steel, wc, wpn.tint ?? 0.35);
+          if (edge) c = mixc(c, [255, 255, 255], 0.3);
+        }
+      } else if (p === 9) c = HP.string;
+      else if (p === 10) c = HP.fletch;
+      else if (p === 11) c = HP.strap;
+      else c = [gray[i], gray[i], gray[i]];
+      put(i, c);
+    }
+    // detalhes: penacho do elmo de ferro, pontas da coroa de ouro, cauda do capuz, gola da capa
+    for (let i = 0; i < N; i++) if (part[i]) pm[i] = part[i];
+    const dot = (x, y, c, id = 14) => x >= 0 && y >= 0 && x < FW && y < FH && (put(y * FW + x, c), (pm[y * FW + x] = id));
+    if (L.helmet === 'ferro') dot(hx0, hy0 - 1, [200, 40, 40]), dot(hx0 - 1, hy0, [200, 40, 40]), dot(hx0 + 1, hy0 - 1, [220, 60, 50]);
+    else if (L.helmet === 'ouro') dot(hx0, hy0 - 1, hm), dot((hx0 + hx1) >> 1, hy0 - 1, hm), dot(hx1, hy0 - 1, hm);
+    if (L.hood) for (let j = 1; j <= 3; j++) if (!part[(hy0 + j) * FW + hx0 - 1]) dot(hx0 - 1, hy0 + j, HP.hood);
+    if (L.cloak) for (let x = M.n[0] - 1; x <= M.n[0] + 1; x++) dot(x, M.n[1], HP.cape[L.cloak] || HP.cape.rubra);
+    // flecha encaixada enquanto o arco é puxado
+    if (M.arrow && wpn.shape === 'arco') {
+      const [ax0, ax1, ay] = M.arrow;
+      for (let x = ax0; x <= ax1; x++) dot(x, ay, x >= ax1 - 1 ? HP.steel : x <= ax0 + 1 ? HP.fletch : [170, 128, 72], 13);
+    }
+    cv = document.createElement('canvas');
+    cv.width = FW;
+    cv.height = FH;
+    // na CPU (willReadFrequently): é copiado para o canvas do herói, que é lido a cada quadro
+    cv.getContext('2d', { willReadFrequently: true }).putImageData(new ImageData(out, FW, FH), 0, 0);
+    cv.pmap = pm;
+    cv.rgba = out;
+    if (heroFrames.size > 800) heroFrames.clear();
+    heroFrames.set(key, cv);
+    return cv;
+  };
+
+  // prog (0..1) toca a animação uma vez sincronizada com uma ação (ex.: o golpe); sem ele, repete pelo tempo.
+  // img.fit preserva a proporção do pixel e apoia os pés na base do quadro
+  const drawImageFrame = (ctx, W, H, img, def, anim, t, prog, set, hero) => {
     const im = getImage(img.src);
     if (!im) return;
+    const A = set || img.anims || {};
     const cols = img.cols || 1, rows = img.rows || 1, n = cols * rows;
-    const seq = parseRange((img.anims || {})[anim] || (img.anims || {}).idle, n);
-    const f = seq[Math.floor(t * (img.fps || 8)) % seq.length];
+    const seq = parseRange(A[anim] || A.idle, n);
+    // cada animação tem sua velocidade (img.fpsBy); as de `img.once` tocam uma vez e seguram o último quadro
+    const fi = Math.floor(t * ((img.fpsBy && img.fpsBy[anim]) || img.fps || 8));
+    const f = prog != null ? seq[Math.min(seq.length - 1, Math.floor(prog * seq.length))] : img.once && img.once.includes(anim) ? seq[Math.min(seq.length - 1, fi)] : seq[fi % seq.length];
     const fw = im.naturalWidth / cols, fh = im.naturalHeight / rows;
     ctx.imageSmoothingEnabled = !img.pixel;
-    ctx.drawImage(im, (f % cols) * fw, Math.floor(f / cols) * fh, fw, fh, 0, 0, W, H);
+    // herói vestido em tempo real (folha de partes)
+    const pc = hero && img.parts ? E.heroPixels(img, f, hero) : null;
+    if (pc) {
+      const k = Math.min(W / pc.width, H / pc.height), dw = pc.width * k, dh = pc.height * k;
+      ctx.drawImage(pc, 0, 0, pc.width, pc.height, (W - dw) / 2, H - dh, dw, dh);
+      return { pc, x: (W - dw) / 2, y: H - dh, k };
+    }
+    if (img.fit) {
+      const k = Math.min(W / fw, H / fh), dw = fw * k, dh = fh * k;
+      ctx.drawImage(im, (f % cols) * fw, Math.floor(f / cols) * fh, fw, fh, (W - dw) / 2, H - dh, dw, dh);
+    } else ctx.drawImage(im, (f % cols) * fw, Math.floor(f / cols) * fh, fw, fh, 0, 0, W, H);
   };
 
   // herói com spritesheet próprio: desenha o quadro da animação `anim` (fallback: idle)
-  E.drawImageHero = (ctx, W, H, img, anim, t, facing) => {
+  // o: { variant (tipo da arma: usa img.variants[variant] se existir), prog (0..1 para tocar uma vez),
+  //      look e weapon (veste o herói e colore a arma, se a imagem tiver folha de partes) }
+  E.drawImageHero = (ctx, W, H, img, anim, t, facing, o = {}) => {
     if (facing < 0) {
       ctx.save();
       ctx.translate(W, 0);
       ctx.scale(-1, 1);
     }
-    const a = (img.anims || {})[anim] ? anim : anim === 'fall' && (img.anims || {}).jump ? 'jump' : anim === 'land' || anim === 'crouch' ? 'idle' : (img.anims || {})[anim] ? anim : 'idle';
-    drawImageFrame(ctx, W, H, img, null, a, t);
+    const A = (o.variant && img.variants && img.variants[o.variant]) || img.anims || {};
+    const a = A[anim] ? anim : anim === 'attack' && A.attack1 ? 'attack1' : anim.startsWith('attack') && A.attack1 ? 'attack1' : anim === 'fall' && A.jump ? 'jump' : 'idle';
+    const cape = /run|dash|swim/.test(a) ? 'run' : /jump|fall|wall/.test(a) ? 'air' : 'idle';
+    // o.legs = { anim, prog }: pernas de outra animação (andar/pular enquanto mira); o.pose/o.step: pose sintetizada (escalada)
+    let legsF = null;
+    if (o.legs && A[o.legs.anim]) {
+      const seq = parseRange(A[o.legs.anim], (img.cols || 1) * (img.rows || 1));
+      legsF = seq[Math.min(seq.length - 1, Math.floor((o.legs.prog % 1) * seq.length))];
+    }
+    const info = drawImageFrame(ctx, W, H, img, null, a, t, o.prog, A, { look: o.look, weapon: o.weapon, cape: o.legs ? (o.legs.anim === 'run' ? 'run' : 'air') : cape, wave: Math.floor(t * 6) % 12, pose: o.pose, step: o.step, legsF });
     if (facing < 0) ctx.restore();
+    return info;
   };
 
   // quadro em células de uma entidade (cache por pose discreta)
@@ -1066,48 +1338,127 @@
     ctx.fillStyle = '#ff3a48';
     ctx.fillRect(cx - w * 0.06, y - h * 0.45, w * 0.12, h * 0.3);
   };
+  // ---------- pessoas (NPCs): corpo em camadas guiado por `look` ----------
+  // look: robe/robe2 (roupa clara/escura), skin, pants, boots, gloves, belt, buckle, apron, sash, cape,
+  //   dress, armor (peitoral de metal), pauldron (ombreiras), hair + hairStyle (curto|longo|rabo|careca|trança|tonsura),
+  //   beard + beardStyle (cheia|longa|cavanhaque|bigode), hat (capuz|capuzFundo|chapeu|pontudo|elmo|elmoNobre|lenco|
+  //   coroa|capacete|tricornio|boina|faixa), hatc, gem, pouch, bag, amulet, tool (martelo|lanca|cajado|vara|frasco|cesta|
+  //   picareta|arco|livro|lanterna|ervas|espada|corda|rosario), shield, quiver, work (anima o trabalho), age
   SPR.person = (ctx, W, H, t, anim, e) => {
     const L = (e && e.def && e.def.look) || {};
     const walk = e && Math.abs(e.vx) > 1, ph = t * 8;
+    const talking = e && e.sayT > 0;
     const cx = W / 2, FH = H * 0.92, feet = H - 1;
-    const bob = walk ? Math.abs(Math.sin(ph)) * FH * 0.015 : Math.sin(t * 1.6) * FH * 0.006;
-    const hip = [cx, feet - FH * 0.45 - bob], neck = [cx + W * 0.02, feet - FH * 0.77 - bob];
+    const old = L.age === 'velho';
+    // respiração: período de 2 s (o cache de quadros repete a cada 4 s)
+    const breath = Math.sin(t * Math.PI) * FH * 0.006;
+    const bob = walk ? Math.abs(Math.sin(ph)) * FH * 0.015 : breath;
+    const stoop = old ? W * 0.05 : 0;
+    const hip = [cx, feet - FH * 0.45 - bob], neck = [cx + W * 0.02 + stoop, feet - FH * (old ? 0.74 : 0.77) - bob];
     const robe = L.robe || '#6a5a48', robe2 = L.robe2 || '#3e342a', skin = L.skin || '#d8a880';
-    // pernas
+    const dark = (h, k = 0.6) => '#' + [1, 3, 5].map((i) => Math.round(parseInt(h.slice(i, i + 2), 16) * k).toString(16).padStart(2, '0')).join('');
+    const boots = L.boots || '#2e2218', pants = L.pants || '#3e3228';
+    // capa atrás de tudo: balança com o vento e com a caminhada
+    if (L.cape) {
+      const sw = Math.sin(t * Math.PI) * W * 0.02 + (walk ? -W * 0.06 : 0);
+      poly(ctx, [[neck[0] - W * 0.14, neck[1] + FH * 0.03], [neck[0] + W * 0.06, neck[1] + FH * 0.03], [cx - W * 0.08 + sw, feet - FH * 0.08], [cx - W * 0.34 + sw, feet - FH * 0.04]], dark(L.cape, 0.8));
+      poly(ctx, [[cx - W * 0.34 + sw, feet - FH * 0.04], [cx - W * 0.27 + sw, feet - FH * 0.1], [cx - W * 0.2 + sw, feet - FH * 0.03]], dark(L.cape, 0.55));
+    }
+    // aljava nas costas
+    if (L.quiver) {
+      poly(ctx, [[neck[0] - W * 0.2, neck[1] + FH * 0.02], [neck[0] - W * 0.12, neck[1] - FH * 0.02], [cx - W * 0.06, hip[1] - FH * 0.02], [cx - W * 0.14, hip[1] + FH * 0.01]], '#6a4424');
+      for (let k = 0; k < 3; k++) limb(ctx, [[neck[0] - W * (0.17 - k * 0.03), neck[1] + FH * 0.01], [neck[0] - W * (0.2 - k * 0.03), neck[1] - FH * 0.07]], W * 0.025, k === 1 ? '#c84a3a' : '#e8e0c8');
+    }
+    // pernas e botas (a de trás mais escura)
+    const legW = W * (L.dress ? 0.08 : 0.1);
     for (const s of [-1, 1]) {
       const a = walk ? Math.sin(ph) * 0.55 * s : 0.06 * s;
       const k = joint(hip[0], hip[1], FH * 0.22, a);
       const f = joint(k[0], k[1], FH * 0.22, a - 0.12);
-      limb(ctx, [hip, k, f], W * 0.1, s < 0 ? '#2a221c' : L.pants || '#3e3228');
-      oval(ctx, f[0] + W * 0.03, f[1] - FH * 0.01, W * 0.08, FH * 0.025, '#241a14');
+      limb(ctx, [hip, k, f], legW, s < 0 ? dark(pants, 0.65) : pants);
+      // cano da bota e pé
+      limb(ctx, [joint(k[0], k[1], FH * 0.12, a - 0.12), f], legW * 1.15, s < 0 ? dark(boots, 0.7) : boots);
+      oval(ctx, f[0] + W * 0.04, f[1] - FH * 0.012, W * 0.09, FH * 0.028, s < 0 ? dark(boots, 0.7) : boots);
     }
     // braço de trás
     const shB = [neck[0] - W * 0.1, neck[1] + FH * 0.05];
-    limb(ctx, [shB, joint(shB[0], shB[1], FH * 0.17, walk ? -Math.sin(ph) * 0.5 : -0.15), joint(shB[0], shB[1] + FH * 0.16, FH * 0.15, walk ? -Math.sin(ph) * 0.3 : 0)], W * 0.09, robe2);
-    // corpo (túnica ou vestido)
-    const hem = L.dress ? feet - FH * 0.06 : hip[1] + FH * 0.1, hw = L.dress ? W * 0.27 : W * 0.19;
+    const elB = joint(shB[0], shB[1], FH * 0.17, walk ? -Math.sin(ph) * 0.5 : -0.15);
+    const handB = joint(elB[0], elB[1], FH * 0.15, walk ? -Math.sin(ph) * 0.3 : 0);
+    limb(ctx, [shB, elB, handB], W * 0.09, dark(robe2, 0.85));
+    oval(ctx, handB[0], handB[1], W * 0.04, FH * 0.018, L.gloves ? dark(L.gloves, 0.8) : dark(skin, 0.8));
+    // escudo no braço de trás
+    if (L.shield) {
+      oval(ctx, handB[0] - W * 0.02, handB[1] - FH * 0.04, W * 0.17, FH * 0.11, L.shield);
+      oval(ctx, handB[0] - W * 0.02, handB[1] - FH * 0.04, W * 0.12, FH * 0.08, dark(L.shield, 0.75));
+      oval(ctx, handB[0] - W * 0.02, handB[1] - FH * 0.04, W * 0.04, FH * 0.022, '#d8c070');
+      mark(ctx, handB[0] - W * 0.02, handB[1] - FH * 0.04, '+', '#ffe08a');
+    }
+    // corpo: túnica (ou vestido) com borda e sombra lateral
+    const hem = L.dress ? feet - FH * 0.06 : hip[1] + FH * 0.11, hw = L.dress ? W * 0.28 : W * 0.2;
     const g = ctx.createLinearGradient(cx - W * 0.25, 0, cx + W * 0.25, 0);
     g.addColorStop(0, robe2);
     g.addColorStop(1, robe);
-    poly(ctx, [[neck[0] - W * 0.16, neck[1] + FH * 0.02], [neck[0] + W * 0.17, neck[1] + FH * 0.02], [cx + W * 0.15, hip[1]], [cx + hw, hem], [cx - hw, hem], [cx - W * 0.15, hip[1]]], g);
-    if (L.apron) poly(ctx, [[cx - W * 0.02, neck[1] + FH * 0.09], [cx + W * 0.16, neck[1] + FH * 0.09], [cx + W * 0.19, hem - FH * 0.02], [cx - W * 0.04, hem - FH * 0.02]], L.apron);
+    const torso = [[neck[0] - W * 0.17, neck[1] + FH * 0.02], [neck[0] + W * 0.17, neck[1] + FH * 0.02], [cx + W * 0.15, hip[1]], [cx + hw, hem], [cx - hw, hem], [cx - W * 0.15, hip[1]]];
+    poly(ctx, torso, g);
+    // barra da roupa: faixa escura com dobras
+    poly(ctx, [[cx + hw, hem], [cx - hw, hem], [cx - hw * 0.97, hem - FH * 0.03], [cx + hw * 0.97, hem - FH * 0.03]], dark(robe2, 0.75));
+    if (L.dress) for (const k of [-0.5, 0, 0.5]) limb(ctx, [[cx + hw * k * 0.6, hip[1] + FH * 0.05], [cx + hw * k, hem - FH * 0.03]], W * 0.02, dark(robe, 0.75));
+    if (L.armor) {
+      // peitoral de metal com rebites
+      poly(ctx, [[neck[0] - W * 0.15, neck[1] + FH * 0.04], [neck[0] + W * 0.16, neck[1] + FH * 0.04], [cx + W * 0.14, hip[1] - FH * 0.02], [cx - W * 0.14, hip[1] - FH * 0.02]], L.armor);
+      poly(ctx, [[neck[0] - W * 0.02, neck[1] + FH * 0.04], [neck[0] + W * 0.16, neck[1] + FH * 0.04], [cx + W * 0.14, hip[1] - FH * 0.02], [cx + W * 0.02, hip[1] - FH * 0.02]], dark(L.armor, 1.25));
+      mark(ctx, cx - W * 0.1, neck[1] + FH * 0.1, 'o');
+      mark(ctx, cx + W * 0.12, neck[1] + FH * 0.1, 'o');
+      if (L.crest) mark(ctx, cx + W * 0.02, neck[1] + FH * 0.15, L.crest, '#ffd23f');
+    }
+    if (L.apron) {
+      poly(ctx, [[cx - W * 0.03, neck[1] + FH * 0.08], [cx + W * 0.17, neck[1] + FH * 0.08], [cx + W * 0.2, hem - FH * 0.01], [cx - W * 0.06, hem - FH * 0.01]], L.apron);
+      // fuligem no avental
+      for (const [ox, oy] of [[0.04, 0.2], [0.1, 0.32]]) oval(ctx, cx + W * ox, neck[1] + FH * oy, W * 0.03, FH * 0.012, dark(L.apron, 0.6));
+    }
+    if (L.sash) poly(ctx, [[neck[0] + W * 0.14, neck[1] + FH * 0.03], [neck[0] + W * 0.17, neck[1] + FH * 0.07], [cx - W * 0.13, hip[1] - FH * 0.01], [cx - W * 0.15, hip[1] - FH * 0.05]], L.sash);
+    // cinto, fivela e bolsas
     ctx.fillStyle = L.belt || '#3a2616';
-    ctx.fillRect(cx - W * 0.16, hip[1] - FH * 0.025, W * 0.33, FH * 0.035);
+    ctx.fillRect(cx - W * 0.16, hip[1] - FH * 0.028, W * 0.34, FH * 0.04);
+    mark(ctx, cx + W * 0.03, hip[1] - FH * 0.008, '=', L.buckle || '#d8b050');
+    if (L.pouch) {
+      oval(ctx, cx - W * 0.1, hip[1] + FH * 0.03, W * 0.06, FH * 0.03, L.pouch);
+      mark(ctx, cx - W * 0.1, hip[1] + FH * 0.03, 'o', dark(L.pouch, 1.3));
+    }
+    if (L.bag) {
+      limb(ctx, [[neck[0] + W * 0.12, neck[1] + FH * 0.03], [cx - W * 0.16, hip[1] + FH * 0.02]], W * 0.035, '#5a3a20');
+      oval(ctx, cx - W * 0.2, hip[1] + FH * 0.05, W * 0.11, FH * 0.06, L.bag);
+      mark(ctx, cx - W * 0.2, hip[1] + FH * 0.04, '$', '#ffd23f');
+    }
+    if (L.amulet) mark(ctx, neck[0] + W * 0.02, neck[1] + FH * 0.07, L.amulet === true ? '♦' : L.amulet, L.gem || '#ffd23f');
+    // ombreiras
+    if (L.pauldron) for (const ox of [-0.12, 0.13]) oval(ctx, neck[0] + W * ox, neck[1] + FH * 0.045, W * 0.09, FH * 0.035, L.pauldron);
     // braço da frente + ferramenta
     const shF = [neck[0] + W * 0.12, neck[1] + FH * 0.05];
     let a = walk ? Math.sin(ph) * 0.5 : 0.25;
-    const working = L.tool === 'martelo' && !walk;
-    if (working) a = 0.5 + Math.max(0, Math.sin(t * 3.2)) * 2.0;
-    if (L.tool === 'lanca' || L.tool === 'cajado') a = 0.9;
+    const tool = L.tool;
+    // trabalho: o ferreiro martela num ritmo de 1 s; o alquimista agita o frasco
+    const working = L.work !== false && !walk && !talking && (tool === 'martelo' || tool === 'picareta');
+    const swing = working ? Math.max(0, Math.sin(t * Math.PI * 2)) : 0;
+    if (working) a = 0.5 + swing * 2.0;
+    if (tool === 'lanca' || tool === 'cajado' || tool === 'lanterna') a = 0.9;
+    if (tool === 'frasco' && !walk) a = 1.1 + Math.sin(t * Math.PI * 2) * 0.25;
+    if (tool === 'livro' && !walk) a = 1.25;
+    // gesto ao conversar: mão para cima e para baixo
+    if (talking && tool !== 'lanca' && tool !== 'cajado') a = 1.4 + Math.sin(t * Math.PI * 4) * 0.35;
     const el = joint(shF[0], shF[1], FH * 0.16, a);
     const hand = joint(el[0], el[1], FH * 0.15, a + (working ? 0.4 : -0.25));
-    if (L.tool === 'lanca') {
+    if (tool === 'lanca') {
       limb(ctx, [[hand[0], feet], [hand[0], feet - FH * 1.02]], W * 0.045, '#7a5a3a');
       poly(ctx, [[hand[0] - W * 0.05, feet - FH * 0.98], [hand[0], feet - FH * 1.1], [hand[0] + W * 0.05, feet - FH * 0.98]], '#d8dce6');
-    } else if (L.tool === 'cajado') {
+      mark(ctx, hand[0], feet - FH * 1.04, '^', '#e8ecf4');
+    } else if (tool === 'cajado') {
       limb(ctx, [[hand[0], feet], [hand[0], feet - FH * 0.95]], W * 0.05, '#7a5a3a');
-      oval(ctx, hand[0], feet - FH * 0.97, W * 0.06, FH * 0.03, L.gem || '#9a6aff');
-    } else if (L.tool === 'vara') {
+      // gema que pulsa (magos)
+      const pulse = 0.8 + 0.2 * Math.sin(t * Math.PI * 2);
+      oval(ctx, hand[0], feet - FH * 0.97, W * 0.07 * pulse, FH * 0.035 * pulse, L.gem || '#9a6aff');
+      mark(ctx, hand[0], feet - FH * 0.97, '*', L.gem || '#c8a0ff');
+    } else if (tool === 'vara') {
       limb(ctx, [hand, [hand[0] + W * 0.42, hand[1] - FH * 0.55]], W * 0.03, '#a07a4a');
       ctx.strokeStyle = '#d8d8d0';
       ctx.lineWidth = 1;
@@ -1115,60 +1466,173 @@
       ctx.moveTo(hand[0] + W * 0.42, hand[1] - FH * 0.55);
       ctx.lineTo(hand[0] + W * 0.44, hand[1] + FH * 0.1 + Math.sin(t * 2) * FH * 0.02);
       ctx.stroke();
-    } else if (L.tool === 'martelo') {
+    } else if (tool === 'martelo') {
       const tip = joint(hand[0], hand[1], FH * 0.16, a + 1.6);
       limb(ctx, [hand, tip], W * 0.04, '#6a4a2a');
-      oval(ctx, tip[0], tip[1], W * 0.08, FH * 0.035, '#8a8f9a');
-    } else if (L.tool === 'frasco') {
+      oval(ctx, tip[0], tip[1], W * 0.09, FH * 0.04, '#8a8f9a');
+      // faísca no fim da batida
+      if (working && swing < 0.15) mark(ctx, tip[0] + W * 0.06, tip[1] + FH * 0.04, '*', '#ffd060');
+    } else if (tool === 'picareta') {
+      const tip = joint(hand[0], hand[1], FH * 0.18, a + 1.6);
+      limb(ctx, [hand, tip], W * 0.04, '#6a4a2a');
+      const p1 = joint(tip[0], tip[1], FH * 0.08, a + 3.1), p2 = joint(tip[0], tip[1], FH * 0.08, a + 0.1);
+      limb(ctx, [p1, tip, p2], W * 0.035, '#9aa0aa');
+    } else if (tool === 'frasco') {
       oval(ctx, hand[0], hand[1] - FH * 0.02, W * 0.07, FH * 0.035, L.gem || '#6aff9a');
       ctx.fillStyle = '#e8e8e0';
       ctx.fillRect(hand[0] - W * 0.015, hand[1] - FH * 0.075, W * 0.03, FH * 0.025);
-    } else if (L.tool === 'cesta') {
+      mark(ctx, hand[0], hand[1] - FH * 0.02, 'o', L.gem || '#8affb0');
+    } else if (tool === 'cesta' || tool === 'ervas') {
       poly(ctx, [[hand[0] - W * 0.1, hand[1]], [hand[0] + W * 0.1, hand[1]], [hand[0] + W * 0.07, hand[1] + FH * 0.07], [hand[0] - W * 0.07, hand[1] + FH * 0.07]], '#a8783a');
-      oval(ctx, hand[0] - W * 0.03, hand[1] - FH * 0.005, W * 0.035, FH * 0.018, '#e84a3a');
-      oval(ctx, hand[0] + W * 0.04, hand[1] - FH * 0.005, W * 0.035, FH * 0.018, '#7ad04a');
+      mark(ctx, hand[0], hand[1] + FH * 0.035, '#', '#7a5428');
+      if (tool === 'ervas') for (const ox of [-0.05, 0, 0.05]) limb(ctx, [[hand[0] + W * ox, hand[1]], [hand[0] + W * ox * 1.6, hand[1] - FH * 0.05]], W * 0.025, '#5ab04a');
+      else {
+        oval(ctx, hand[0] - W * 0.03, hand[1] - FH * 0.005, W * 0.035, FH * 0.018, '#e84a3a');
+        oval(ctx, hand[0] + W * 0.04, hand[1] - FH * 0.005, W * 0.035, FH * 0.018, '#7ad04a');
+      }
+    } else if (tool === 'livro') {
+      poly(ctx, [[hand[0] - W * 0.09, hand[1] - FH * 0.02], [hand[0] + W * 0.09, hand[1] - FH * 0.02], [hand[0] + W * 0.09, hand[1] + FH * 0.035], [hand[0] - W * 0.09, hand[1] + FH * 0.035]], '#7a2a2a');
+      mark(ctx, hand[0], hand[1], '≡', '#e8dcb0');
+    } else if (tool === 'lanterna') {
+      limb(ctx, [hand, [hand[0], hand[1] + FH * 0.05]], W * 0.02, '#4a4a50');
+      oval(ctx, hand[0], hand[1] + FH * 0.08, W * 0.06, FH * 0.035, '#ffcc60');
+      mark(ctx, hand[0], hand[1] + FH * 0.08, 'o', '#ffe7a0');
+    } else if (tool === 'espada') {
+      const tip = joint(hand[0], hand[1], FH * 0.3, a + 0.6);
+      limb(ctx, [hand, tip], W * 0.04, '#d8dce6');
+      limb(ctx, [joint(hand[0], hand[1], W * 0.08, a - 1), joint(hand[0], hand[1], W * 0.08, a + 2.2)], W * 0.035, '#c8a040');
+    } else if (tool === 'arco') {
+      ctx.strokeStyle = '#8a5a2a';
+      ctx.lineWidth = W * 0.04;
+      ctx.beginPath();
+      ctx.ellipse(hand[0], hand[1], W * 0.07, FH * 0.2, 0, -Math.PI / 2, Math.PI / 2);
+      ctx.stroke();
+      limb(ctx, [[hand[0], hand[1] - FH * 0.2], [hand[0], hand[1] + FH * 0.2]], 1, '#e8e0c8');
+    } else if (tool === 'corda') {
+      ctx.strokeStyle = '#c8a870';
+      ctx.lineWidth = W * 0.03;
+      for (let k = 0; k < 2; k++) {
+        ctx.beginPath();
+        ctx.ellipse(hand[0], hand[1] + FH * 0.04, W * (0.08 - k * 0.025), FH * (0.04 - k * 0.012), 0, 0, 7);
+        ctx.stroke();
+      }
+    } else if (tool === 'rosario') {
+      for (let k = 0; k < 4; k++) mark(ctx, hand[0], hand[1] + FH * (0.02 + k * 0.035), k === 3 ? '+' : '·', '#d8c890');
     }
     limb(ctx, [shF, el, hand], W * 0.09, robe);
-    oval(ctx, hand[0], hand[1], W * 0.045, FH * 0.02, skin);
+    // manga com punho mais escuro
+    limb(ctx, [joint(el[0], el[1], FH * 0.1, a + (working ? 0.4 : -0.25)), joint(el[0], el[1], FH * 0.12, a + (working ? 0.4 : -0.25))], W * 0.1, dark(robe, 0.7));
+    oval(ctx, hand[0], hand[1], W * 0.045, FH * 0.02, L.gloves || skin);
     // cabeça
     const hc = [neck[0] + W * 0.02, neck[1] - FH * 0.075];
-    oval(ctx, hc[0], hc[1], W * 0.14, FH * 0.08, skin);
-    if (L.hair) {
-      ctx.fillStyle = L.hair;
-      ctx.beginPath();
-      ctx.ellipse(hc[0] - W * 0.01, hc[1] - FH * 0.02, W * 0.15, FH * 0.07, 0, Math.PI, Math.PI * 2);
-      ctx.fill();
-      if (L.dress) ctx.fillRect(hc[0] - W * 0.16, hc[1] - FH * 0.02, W * 0.07, FH * 0.12);
+    const hairC = L.hair, hs = L.hairStyle || (L.dress ? 'longo' : 'curto');
+    // cabelo comprido / trança fica atrás da cabeça
+    if (hairC && (hs === 'longo' || hs === 'trança')) {
+      poly(ctx, [[hc[0] - W * 0.15, hc[1] - FH * 0.02], [hc[0] - W * 0.02, hc[1] - FH * 0.02], [hc[0] - W * 0.06, hc[1] + FH * (hs === 'trança' ? 0.2 : 0.13)], [hc[0] - W * 0.17, hc[1] + FH * 0.11]], hairC);
+      if (hs === 'trança') for (let k = 0; k < 3; k++) mark(ctx, hc[0] - W * 0.1, hc[1] + FH * (0.06 + k * 0.045), '8', dark(hairC, 1.25));
     }
-    if (L.beard) poly(ctx, [[hc[0] - W * 0.04, hc[1] + FH * 0.03], [hc[0] + W * 0.14, hc[1] + FH * 0.03], [hc[0] + W * 0.06, hc[1] + FH * 0.16]], L.beard);
+    oval(ctx, hc[0], hc[1], W * 0.14, FH * 0.08, skin);
+    // nariz e orelha dão perfil
+    oval(ctx, hc[0] + W * 0.135, hc[1] + FH * 0.008, W * 0.03, FH * 0.015, dark(skin, 0.9));
+    oval(ctx, hc[0] - W * 0.03, hc[1] + FH * 0.005, W * 0.025, FH * 0.018, dark(skin, 0.8));
+    if (hairC) {
+      ctx.fillStyle = hairC;
+      ctx.beginPath();
+      if (hs === 'careca' || hs === 'tonsura') {
+        // só a coroa de cabelo em volta
+        ctx.ellipse(hc[0] - W * 0.03, hc[1] - FH * 0.005, W * 0.13, FH * 0.03, 0, Math.PI * 0.9, Math.PI * 1.6);
+      } else ctx.ellipse(hc[0] - W * 0.01, hc[1] - FH * 0.02, W * 0.15, FH * 0.07, 0, Math.PI, Math.PI * 2);
+      ctx.fill();
+      if (hs === 'rabo') limb(ctx, [[hc[0] - W * 0.13, hc[1] - FH * 0.02], [hc[0] - W * 0.2, hc[1] + FH * 0.06]], W * 0.05, hairC);
+      if (hs === 'curto' || hs === 'rabo') mark(ctx, hc[0] - W * 0.02, hc[1] - FH * 0.06, '~', dark(hairC, 1.3));
+    }
+    // barba, bigode, cavanhaque
+    if (L.beard) {
+      const bs = L.beardStyle || 'cheia';
+      if (bs === 'cheia' || bs === 'longa') {
+        const len = bs === 'longa' ? 0.24 : 0.15;
+        poly(ctx, [[hc[0] - W * 0.04, hc[1] + FH * 0.025], [hc[0] + W * 0.15, hc[1] + FH * 0.025], [hc[0] + W * 0.1, hc[1] + FH * (len * 0.6)], [hc[0] + W * 0.04, hc[1] + FH * len]], L.beard);
+        mark(ctx, hc[0] + W * 0.06, hc[1] + FH * (len * 0.55), bs === 'longa' ? 'V' : 'w', dark(L.beard, 1.2));
+      } else if (bs === 'cavanhaque') poly(ctx, [[hc[0] + W * 0.06, hc[1] + FH * 0.045], [hc[0] + W * 0.14, hc[1] + FH * 0.045], [hc[0] + W * 0.1, hc[1] + FH * 0.1]], L.beard);
+      if (bs === 'bigode' || bs === 'cavanhaque' || bs === 'cheia') limb(ctx, [[hc[0] + W * 0.05, hc[1] + FH * 0.028], [hc[0] + W * 0.16, hc[1] + FH * 0.03]], W * 0.035, dark(L.beard, 0.9));
+    }
+    // chapéus e capacetes
     const hatc = L.hatc || robe;
-    if (L.hat === 'capuz') {
+    const hat = L.hat;
+    if (hat === 'capuz' || hat === 'capuzFundo') {
       ctx.fillStyle = hatc;
       ctx.beginPath();
       ctx.ellipse(hc[0] - W * 0.02, hc[1] - FH * 0.01, W * 0.19, FH * 0.105, 0, Math.PI * 0.75, Math.PI * 2.1);
       ctx.fill();
-    } else if (L.hat === 'chapeu') {
+      // ponta do capuz caída atrás
+      poly(ctx, [[hc[0] - W * 0.15, hc[1] - FH * 0.06], [hc[0] - W * 0.27, hc[1] + FH * 0.04], [hc[0] - W * 0.14, hc[1] + FH * 0.03]], dark(hatc, 0.8));
+      if (hat === 'capuzFundo') {
+        // rosto na sombra: só os olhos brilham
+        oval(ctx, hc[0] + W * 0.06, hc[1] + FH * 0.01, W * 0.1, FH * 0.06, '#0e0a10');
+        mark(ctx, hc[0] + W * 0.09, hc[1], '·', L.eyes || '#9affd8');
+      }
+    } else if (hat === 'chapeu') {
       oval(ctx, hc[0], hc[1] - FH * 0.06, W * 0.3, FH * 0.022, hatc);
       oval(ctx, hc[0], hc[1] - FH * 0.09, W * 0.14, FH * 0.045, hatc);
-    } else if (L.hat === 'pontudo') {
+      ctx.fillStyle = dark(hatc, 0.6);
+      ctx.fillRect(hc[0] - W * 0.14, hc[1] - FH * 0.075, W * 0.28, FH * 0.012);
+    } else if (hat === 'tricornio') {
+      oval(ctx, hc[0], hc[1] - FH * 0.075, W * 0.15, FH * 0.05, hatc);
+      poly(ctx, [[hc[0] - W * 0.26, hc[1] - FH * 0.05], [hc[0] - W * 0.1, hc[1] - FH * 0.13], [hc[0], hc[1] - FH * 0.07], [hc[0] + W * 0.12, hc[1] - FH * 0.13], [hc[0] + W * 0.26, hc[1] - FH * 0.05]], hatc);
+      mark(ctx, hc[0], hc[1] - FH * 0.1, '▲', dark(hatc, 0.7));
+    } else if (hat === 'boina') {
+      oval(ctx, hc[0] - W * 0.03, hc[1] - FH * 0.065, W * 0.18, FH * 0.04, hatc);
+      oval(ctx, hc[0] + W * 0.05, hc[1] - FH * 0.1, W * 0.03, FH * 0.02, L.gem || '#e8d8a0');
+    } else if (hat === 'pontudo') {
       oval(ctx, hc[0], hc[1] - FH * 0.06, W * 0.26, FH * 0.02, hatc);
       poly(ctx, [[hc[0] - W * 0.15, hc[1] - FH * 0.06], [hc[0] - W * 0.12, hc[1] - FH * 0.3], [hc[0] + W * 0.14, hc[1] - FH * 0.06]], hatc);
       ctx.fillStyle = '#ffd23f';
       ctx.fillRect(hc[0] - W * 0.06, hc[1] - FH * 0.15, W * 0.05, FH * 0.025);
-    } else if (L.hat === 'elmo') {
+      mark(ctx, hc[0] - W * 0.05, hc[1] - FH * 0.16, '*', '#ffe07a');
+    } else if (hat === 'elmo' || hat === 'elmoNobre') {
       ctx.fillStyle = '#c8ccd6';
       ctx.beginPath();
       ctx.ellipse(hc[0], hc[1] - FH * 0.005, W * 0.16, FH * 0.09, 0, Math.PI * 0.95, Math.PI * 2.05);
       ctx.fill();
       ctx.fillRect(hc[0] - W * 0.16, hc[1] - FH * 0.01, W * 0.32, FH * 0.02);
-    } else if (L.hat === 'lenco') {
+      // protetor de nariz
+      ctx.fillRect(hc[0] + W * 0.09, hc[1] - FH * 0.01, W * 0.03, FH * 0.045);
+      mark(ctx, hc[0], hc[1] - FH * 0.06, hat === 'elmoNobre' ? '♠' : '^', hat === 'elmoNobre' ? '#d83a3a' : '#e8ecf4');
+      if (hat === 'elmoNobre') poly(ctx, [[hc[0] - W * 0.04, hc[1] - FH * 0.08], [hc[0] - W * 0.22, hc[1] - FH * 0.12], [hc[0] - W * 0.2, hc[1] - FH * 0.03]], '#c83a3a');
+    } else if (hat === 'capacete') {
+      // capacete de mineiro com lamparina
+      ctx.fillStyle = hatc || '#b08a3a';
+      ctx.beginPath();
+      ctx.ellipse(hc[0], hc[1] - FH * 0.01, W * 0.16, FH * 0.08, 0, Math.PI, Math.PI * 2);
+      ctx.fill();
+      ctx.fillRect(hc[0] - W * 0.18, hc[1] - FH * 0.015, W * 0.36, FH * 0.018);
+      oval(ctx, hc[0] + W * 0.1, hc[1] - FH * 0.05, W * 0.045, FH * 0.022, '#ffe7a0');
+      mark(ctx, hc[0] + W * 0.11, hc[1] - FH * 0.05, 'o', '#fff0b0');
+    } else if (hat === 'lenco') {
       ctx.fillStyle = hatc;
       ctx.beginPath();
       ctx.ellipse(hc[0] - W * 0.01, hc[1] - FH * 0.025, W * 0.155, FH * 0.07, 0, Math.PI, Math.PI * 2);
       ctx.fill();
+      poly(ctx, [[hc[0] - W * 0.14, hc[1] - FH * 0.02], [hc[0] - W * 0.23, hc[1] + FH * 0.05], [hc[0] - W * 0.12, hc[1] + FH * 0.02]], hatc);
+    } else if (hat === 'faixa') {
+      ctx.fillStyle = hatc;
+      ctx.fillRect(hc[0] - W * 0.15, hc[1] - FH * 0.045, W * 0.3, FH * 0.022);
+    } else if (hat === 'coroa' || hat === 'diadema') {
+      crown(ctx, hc[0] - W * 0.01, hc[1] - FH * 0.045, W * (hat === 'coroa' ? 0.26 : 0.2), FH * (hat === 'coroa' ? 0.07 : 0.035), '#ffd23f');
+      mark(ctx, hc[0], hc[1] - FH * 0.1, hat === 'coroa' ? 'W' : '^', '#ffe07a');
     }
-    ctx.fillStyle = '#1a1210';
-    ctx.fillRect(hc[0] + W * 0.07, hc[1] - FH * 0.012, W * 0.04, FH * 0.02);
+    // olho (e sobrancelha) — no capuz fundo o rosto está na sombra
+    if (hat !== 'capuzFundo') {
+      ctx.fillStyle = '#1a1210';
+      ctx.fillRect(hc[0] + W * 0.07, hc[1] - FH * 0.012, W * 0.04, FH * 0.02);
+      ctx.fillStyle = L.hair && !old ? dark(L.hair, 0.8) : old ? '#d8d8d0' : '#3a2a20';
+      ctx.fillRect(hc[0] + W * 0.055, hc[1] - FH * 0.03, W * 0.07, FH * 0.008);
+      // boca abre e fecha falando
+      if (talking && Math.sin(t * Math.PI * 8) > 0) {
+        ctx.fillStyle = '#5a2020';
+        ctx.fillRect(hc[0] + W * 0.08, hc[1] + FH * 0.04, W * 0.04, FH * 0.015);
+      }
+    }
   };
 
   // ---------- chefes ----------
@@ -1249,6 +1713,7 @@
     if (def.image && def.image.src) drawImageFrame(ctx, cv.width, cv.height, def.image, def, e.anim, tq);
     else (SPR[def.sprite] || SPR.slime)(ctx, cv.width, cv.height, tq, e.anim, e);
     c = E.canvasToCells(cv, sw, sh);
+    applyMarks(c, cv, e.facing < 0);
     if (def.tint) for (const cell of c.cells) if (cell) for (let k = 0; k < 3; k++) cell[k] = Math.min(255, cell[k] * def.tint[k]);
     if (cache.size > 3000) cache.clear();
     cache.set(key, c);

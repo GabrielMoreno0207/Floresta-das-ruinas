@@ -409,7 +409,7 @@ function onInteract(self, player, api) {
     Porta: `// porta de madeira: E abre/fecha. props: {"trancada":true} pede chave; {"destino":"caverna","x":30,"y":80} leva a outro mapa
 function onSpawn(self, api) {
   self.vars.aberta = false;
-  if (!self.props.destino) api.setCollider(Math.round(self.x) - 1, Math.round(self.y) - 19, 3, 19, 1);
+  if (!self.props.destino) api.setCollider(Math.round(self.x) - 1, Math.round(self.y) - self.def.h, 3, self.def.h, 1);
 }
 function onInteract(self, player, api) {
   if (self.props.trancada && !self.vars.destrancada) {
@@ -425,7 +425,7 @@ function onInteract(self, player, api) {
   self.vars.aberta = !self.vars.aberta;
   api.sound('porta', self);
   api.anim(self, self.vars.aberta ? 'aberta' : 'idle');
-  api.setCollider(Math.round(self.x) - 1, Math.round(self.y) - 19, 3, 19, self.vars.aberta ? 0 : 1);
+  api.setCollider(Math.round(self.x) - 1, Math.round(self.y) - self.def.h, 3, self.def.h, self.vars.aberta ? 0 : 1);
   api.fx('poeira', self.x, self.y);
 }`,
     Tocha: `// tocha: luz que tremula e solta brasas

@@ -11,6 +11,11 @@ fs.rmSync(out, { recursive: true, force: true });
 fs.mkdirSync(path.join(out, 'js'), { recursive: true });
 fs.copyFileSync(path.join(engine, 'index.html'), path.join(out, 'index.html'));
 for (const f of fs.readdirSync(path.join(engine, 'js'))) fs.copyFileSync(path.join(engine, 'js', f), path.join(out, 'js', f));
+// músicas do jogo (audio/musica.mp3 e audio/chefe.mp3)
+if (fs.existsSync(path.join(engine, 'audio'))) {
+  fs.mkdirSync(path.join(out, 'audio'), { recursive: true });
+  for (const f of fs.readdirSync(path.join(engine, 'audio'))) fs.copyFileSync(path.join(engine, 'audio', f), path.join(out, 'audio', f));
+}
 
 const data = path.join(root, 'game-data.js');
 if (fs.existsSync(data)) {

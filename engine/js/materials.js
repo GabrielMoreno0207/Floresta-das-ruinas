@@ -57,7 +57,29 @@
     M(30, 'CORAL', 'Coral', [1.0, 0.45, 0.55], '*Yy', 1, { vary: 0.4, emissive: 0.15 }),
     M(31, 'MASONRY', 'Alvenaria', [0.6, 0.62, 0.7], '0Q8O@', 5, { solid: true, vary: 0.14, top: '▄' }),
     M(250, 'INK', 'Tinta (sprite/imagem)', [1, 1, 1], '.-:=+*#%@', 4, { vary: 0, emissive: 0.55 }),
+    // materiais de construção com textura própria (arquitetura e biomas)
+    M(32, 'PLASTER', 'Reboco', [0.8, 0.74, 0.6], '▒░▒:▒', 1, { vary: 0.08 }),
+    M(33, 'THATCH', 'Palha (telhado)', [0.74, 0.6, 0.3], "\\\"'/;", 1, { solid: true, vary: 0.18, top: '^' }),
+    M(34, 'SHINGLE', 'Telhas', [0.56, 0.24, 0.2], 'nm', 5, { solid: true, vary: 0.12, top: '^' }),
+    M(35, 'COBBLE', 'Pedra rústica', [0.5, 0.5, 0.52], 'Oo0@Q', 5, { solid: true, vary: 0.22, top: '▄' }),
+    M(36, 'MUD', 'Lama', [0.3, 0.24, 0.16], '~,.;', 3, { solid: true, vary: 0.2, top: '~' }),
+    M(37, 'COAL', 'Carvão', [0.2, 0.19, 0.2], '%&#@', 1, { vary: 0.25 }),
   ];
+  // materiais-glifo: um por caractere do atlas, com cor por célula. Servem para carimbar arte ASCII
+  // exata no mundo (placas, barris, molduras, ossos...) — ficam fora da paleta do editor.
+  // Modo 4 com um glifo só: o caractere é sempre o mesmo e o topo exposto não é trocado.
+  const ART_CHARS = "/\\|-_=+*!()[]{}<>?#%&@$:;.,'`\"^~0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz≈·•°◆◇░▒▓█▀▄■□▲▼◄►♦♣♠♥☼‖∩ШΛʟ≡●▬";
+  const ART_GLOW = '▒░▓█*+o.\'^:"#=◆●';
+  E.ART_MAT = {};
+  E.ART_GLOW_MAT = {};
+  [...ART_CHARS].forEach((c, i) => {
+    E.MATERIALS.push(M(100 + i, 'ART' + i, 'Arte ' + c, [1, 1, 1], c, 4, { vary: 0, hidden: true }));
+    E.ART_MAT[c] = 100 + i;
+  });
+  [...ART_GLOW].forEach((c, i) => {
+    E.MATERIALS.push(M(232 + i, 'ARTG' + i, 'Arte acesa ' + c, [1, 1, 1], c, 4, { vary: 0, hidden: true, emissive: 0.9 }));
+    E.ART_GLOW_MAT[c] = 232 + i;
+  });
   E.MAT = {};
   E.MAT_BY_ID = [];
   for (const m of E.MATERIALS) {

@@ -13,9 +13,9 @@ Abra `engine/index.html` no Chrome/Edge (WebGL2). O projeto se salva sozinho no 
 | Espaço / ↑ / W | pular — segurar = mais alto; coyote time + buffer; **pulo duplo**; **pulo na parede** |
 | ↓ | agachar · ↓ + Espaço desce de plataforma vazada · ↑/↓ em escadas = escalar |
 | Shift / K | dash (com rastro e invencibilidade curta) |
-| Clique esquerdo / J | espada **na direção do mouse** — combo de 3 golpes; golpe para baixo no ar quica no inimigo |
+| Clique esquerdo / J | espada **na direção do mouse** — combo de 3 golpes; golpe para baixo no ar quica no inimigo. Com **arco**: segure para puxar a corda (mostra a trajetória tracejada em ASCII, com um x onde a flecha cai; mais carga = mais força e dano) e solte para atirar |
 | E | interagir (portas, baús, NPCs, fogueiras) |
-| Q | arremessar bomba · 1–5 usar hotbar · I inventário |
+| Q | arremessar bomba · 1–9 e 0 usam a hotbar (10 espaços grandes, com o ícone inteiro) · I inventário (25 espaços) |
 | C | **modo criativo**: coloca criaturas, tochas, fogueiras e baús onde clicar (botão direito remove) |
 | Esc | pausa / **opções** (volumes, glifo, bloom, tremor, FPS, criativo, tela cheia) |
 | F2 | mostrar colisores · Tab editor |
@@ -33,9 +33,9 @@ Abra a engine com dois cliques em **`ASCII Engine.bat`**. Ele liga o servidor lo
 - Ctrl+Z / Ctrl+Y desfazem/refazem; WASD ou botão do meio movem a câmera; roda do mouse = tamanho do pincel.
 
 ### Mundo
-Mundo único de **9.500×300 células**, estilo Terraria. Da esquerda para a direita: Oceano, Praia, Deserto (com pirâmide), **Floresta das Ruínas** (o mapa original), Floresta Grande (árvores gigantes), Castelo da Floresta, Terras Geladas e Oceano Gelado.
+Mundo único de **9.500×540 células**, estilo Terraria. Da esquerda para a direita: Oceano, Praia, Deserto (com pirâmide), **Floresta das Ruínas** (o mapa original), Floresta Grande (árvores gigantes), Castelo da Floresta, Terras Geladas e Oceano Gelado.
 
-**Transições naturais**: nas faixas de ~150 células entre dois biomas, o relevo mistura as duas formas com curva suave. Os materiais se pontilham em manchas: a areia vira terra, a grama aparece aos poucos, a neve rareia. A vegetação também segue o peso de cada bioma (cactos somem enquanto árvores surgem, pinheiros nevados se misturam às árvores comuns). Castelo e pirâmide ficam sobre platôs com rampas.
+**Transições naturais**: cada fronteira tem largura própria e ondula com a profundidade, então nunca forma uma linha vertical. O relevo mistura as duas formas com curva suave, e os materiais se misturam em manchas orgânicas (ruído suave, sem quadriculado), mais fortes na fronteira e ausentes no interior de cada bioma. Entre deserto e floresta a grama seca e rareia, surgem tufos secos, arbustos resistentes à seca e solo misto de terra e areia, e as árvores vão ficando mais espaçadas (inclusive na borda da Floresta das Ruínas). Na fronteira fria aparecem neve e gelo em manchas, grama gelada, arbustos nevados e árvores mais espaçadas. Castelo e pirâmide ficam sobre platôs com rampas.
 
 **Fundo por bioma**, trocado em transição gradual conforme o herói anda:
 
@@ -50,7 +50,7 @@ Mundo único de **9.500×300 células**, estilo Terraria. Da esquerda para a dir
 
 Cada fundo tem 3 a 4 camadas com névoa atmosférica, e as cristas de montanha são desenhadas pela inclinação. Detalhes por bioma: torres em ruínas, colinas com árvores, troncos gigantes em duas profundidades com raios de sol, castelo com bandeiras tremulando, pirâmides e mesas com estratos, navio no horizonte. Nuvens passam em todos. **M** abre o mapa ASCII.
 
-**Subsolo**: dezenas de túneis longos e mais de 30 **salões enormes** cavados sob todos os biomas, com cristais, cogumelos, baús e criaturas que dependem do bioma de cima. Cinco **poços de mina com escada** levam da superfície aos salões.
+**Subsolo**: a camada de terra (ou areia, no deserto e na costa) desce fundo e termina numa borda irregular, com bolsões de terra presos na rocha. A rocha tem estratos de cor ondulados e o tom do bioma de cima. As cavernas são temáticas: terra, musgo, raízes e cogumelos sob as florestas (raízes gigantes e cogumelos enormes sob a Floresta Grande), arenito, areia, ossos e cristais âmbar sob o deserto, gelo, neve, pingentes e cristais azuis nas Terras Geladas, areia e corais na costa, e ruínas de alvenaria com correntes sob o castelo. Os túneis são sinuosos, com gargalos, ramificações, fendas e salões de vários bolsões com pilares, poças, lava nos mais fundos e veios de ferro. Cinco **poços de mina com escada** levam aos salões. Longe do céu as cavernas ficam em penumbra, nunca em preto total (ajuste em Editor → Mundo → Luz nas cavernas).
 
 **Vilarejos**: Porto da Areia, Oásis, Vila do Bosque e Vila Gelada. Cada um tem casas, barracas de feira, poço, lanternas, fogueira, aldeões que passeiam e conversam (`props.fala`) e guardas. Os comerciantes variam por vila:
 - **pescador**: comida.
@@ -60,7 +60,13 @@ Cada fundo tem 3 a 4 camadas com névoa atmosférica, e as cristas de montanha s
 
 **Ferreiros** (Porto, Bosque e Gelada) trabalham numa forja com fogo aceso e melhoram a arma e cada armadura equipada até **+3**. Arma: +1 de dano por nível. Armadura: +1 de defesa por nível. Cada melhoria custa moedas e **lingotes de ferro**. Cada ponto de defesa dá 10% de chance de bloquear um golpe, até 70%.
 
-**Masmorras com chefe**: cada uma é um mapa de 1.500×320 com corredores largos, criptas e um salão final com braseiros e uma fogueira antes da luta.
+**Masmorras perdidas**: ficam no subsolo profundo do próprio mundo (1.150×228 cada), e cada uma tem uma planta própria, pensada para o seu chefe:
+- **Ninho da Rainha Aranha** (sob a mina da Floresta das Ruínas): câmaras de rocha ligadas por túneis, um abismo vertical com pontes e plataformas de teia, bolsões com ovos e casulos, um poço de lava e um ninho redondo como arena, com teias enormes e casulos pendurados.
+- **Cripta do Rei Esqueleto** (deserto): túmulo de três níveis ligados por escadarias, galeria de nichos com ossos, ossuário com sarcófagos, criptas secretas por escadas de mão e a sala do trono como arena (estandartes, braseiros, trono dourado). Rachaduras, areia acumulada e teias mostram o abandono.
+- **Covil do Slime Rei** (Floresta Grande): bolhas de musgo ligadas por tubos curtos, com rotas alternativas, chapéus de cogumelo como plataformas, poças de gosma verde, cipós e uma tigela enorme como arena.
+- **Salão do Golem de Gelo** (Terras Geladas): rampa de geleira, lago congelado com colunas de gelo, fenda funda com ponte de gelo (o trecho rachado deixa descer ao fundo) e o salão do golem com cachoeira congelada e cristais.
+
+As masmorras se mesclam à rocha do mundo (sem recorte retangular), têm paredes revestidas com materiais do tema e estruturas construídas: escoramento de mina tomado pelas aranhas, criptas desgastadas com desabamentos para cavernas naturais, ruínas de tijolo engolidas pelo fungo e o palácio de gelo com janelas em arco. Cada masmorra tem fogueira na entrada e outra antes da arena, cinco baús e criaturas próprias. Todo o caminho é transitável nos dois sentidos, com degraus baixos, saltos curtos, plataformas vazadas e escadas. A entrada na superfície é uma boca de caverna natural: um paredão de rocha com a abertura em arco, dentes de pedra (ou pingentes) na saliência, cipós, pedregulhos, cascalho, tocha e detalhes do tema (colunas de arenito quebradas com inscrições, gelo e cristais, ou cogumelos gigantes e musgo). De lá, uma descida longa com escada leva à masmorra.
 
 | Masmorra | Entrada | Chefe | Recompensa única |
 |---|---|---|---|
@@ -78,6 +84,8 @@ Os chefes ficam mais rápidos e agressivos com metade da vida, mostram uma barra
 **Itens e falas**: o item largado no chão mostra o ícone ASCII completo. O inventário tem espaços grandes com o ícone inteiro. As falas dos NPCs aparecem em balões maiores, e passar o mouse sobre uma criatura ou NPC mostra contorno, nome e vida.
 
 ### Herói e espada
+**Herói em pixel art**: o herói padrão vem do `Human Male Model.aseprite`, convertido para `engine/js/hero-sprite.js` (132 quadros de 32×31 px, com uma folha de cores, uma folha de partes do corpo e os marcos de cada quadro). O manequim cinza é vestido em tempo real conforme o equipamento: cabelo e túnica por padrão, elmo de ferro com penacho, elmo ou coroa de ouro, capuz sombrio, peitoral de ferro ou de ouro, capas (rubra, gélida, da floresta, sombria) que esvoaçam ao correr e pular, e botas de couro, ferro ou aladas. A arma do arquivo (espada, arco com corda e aljava, ou cajado com joia) é colorida conforme a arma equipada, e o arco mostra a flecha encaixada ao puxar. Com a mira para cima o herói golpeia por cima da cabeça, e no ar, mirando para baixo, golpeia para baixo (golpes gerados girando braço, espada e efeito a partir dos golpes do arquivo). O agachar é uma pose de um joelho no chão. O escudo do arquivo foi removido, e a pose de agachar é gerada a partir da pose parada. Cada animação tem sua velocidade e recomeça na troca de estado: o parado respira devagar, a corrida avança pela distância andada (os pés não deslizam), pulo, aterrissagem e dano tocam uma vez, e os golpes acompanham o tempo do ataque. Depois cada quadro vira ASCII colorido com sombra, como no modo colorido da extensão ASCII Art do Aseprite. Para voltar ao herói desenhado por linhas, use Editor → Jogador → "Voltar ao herói procedural".
+
 O herói é desenhado em **arte de linha ASCII**, com cabeça oval separada por um pescoço, ombros largos com ombreiras, peito em V até o cinto, quadril e saia, e uma cor de preenchimento por região: o glifo de cada célula sai da orientação do traço (`/ \ | _ - ( ) ' .`). No jogo usa traços essenciais; no retrato do inventário aparece com detalhe completo. O golpe de espada deixa um **rastro em lua crescente que segue a ponta real da lâmina** na direção do mouse, com glifos alinhados ao corte e faíscas de impacto na direção do golpe.
 
 ### Itens e armaduras
@@ -90,13 +98,14 @@ O herói é desenhado em **arte de linha ASCII**, com cabeça oval separada por 
   - **Arremesso**: faca e bomba de gelo. **Luz**: tocha de mão e cristal de luz.
   - **Materiais** que caem de cada criatura, como gosma, osso, presa, ferrão, lingote, essência e gemas.
 - **Comerciantes** (prefabs `mercador`, `alquimista`, `armeiro`, `pescador`): ficam nos vilarejos, cada um com um estoque diferente em `props.stock`. Loja em ASCII: compra pelo `price` do item e vende pela metade. O `ferreiro` abre a forja.
-- **Inventário** (I): retrato ASCII animado do herói com o equipamento atual, espaços de Cabeça/Corpo/Pés/Arma/Luz (clique para desequipar), barra de defesa e o ícone do item selecionado.
+- **Inventário** (I): painel grande com o **herói em 3D ASCII**: o próprio pixel art do herói (mesmas cores, roupa, armaduras, capa e arma) transformado em voxels com profundidade por parte do corpo, na pose parada respirando. Ele gira sozinho; arraste com o mouse ou use [◄] [►] para girar (depois de um tempo volta a girar sozinho). Só as linhas do boneco são redesenhadas, então clicar nos itens funciona normalmente. Também tem espaços de Cabeça/Corpo/Pés/Arma/Luz (clique para desequipar), barra de defesa e o ícone do item selecionado.
 
 ### Dia e noite
 A floresta tem um ciclo (padrão de 8 minutos reais por dia). O céu passa por noite, amanhecer, dia e entardecer, com o sol e a lua de glifos cruzando o céu. As estrelas somem de dia e a luz ambiente muda. Grilos tocam à noite e pássaros de dia; o relógio aparece no HUD. Spawners podem ser só de noite ou só de dia, e a caverna não tem ciclo. Ajuste em Editor → Mundo.
 
 ### Som
-Tudo é sintetizado em tempo real (WebAudio, `engine/js/audio.js`), sem arquivos de áudio. Inclui efeitos (passos, pulos, espada, acertos, mortes, moedas, portas, baús, explosões, magia, menu), ambiente (vento, grilos, gotas na caverna, crepitar perto de fogo, chuva) e música generativa que fica mais escura na caverna. **Cada criatura tem seus sons**: aranha (passos rápidos, sibilo, guincho), slime (pulo e “ploft”), morcego (guinchos e asas), esqueletos (ossos chacoalhando, arco, golpe pesado, escudo de metal), espírito (sussurro, orbe, lamento) e a voz do eremita. Dá para trocar e ouvir em Editor → Criaturas. Nos scripts, use `api.sound('nome', self)`.
+**Música**: `engine/audio/musica.mp3` é a música padrão (em loop) e `engine/audio/chefe.mp3` toca na luta com chefe. Quando um chefe desperta, a música troca em ~1,2 s e a do chefe começa do início; ao fim da luta volta à padrão em ~2 s. O volume segue Opções → Volume geral × Música. Para trocar as músicas, substitua os arquivos (mesmo nome). Sem os arquivos, toca a música generativa. A build copia a pasta `audio/` junto.
+Os efeitos são sintetizados em tempo real (WebAudio, `engine/js/audio.js`), sem arquivos de áudio. Inclui efeitos (passos, pulos, espada, acertos, mortes, moedas, portas, baús, explosões, magia, menu), ambiente (vento, grilos, gotas na caverna, crepitar perto de fogo, chuva). **Cada criatura tem seus sons**: aranha (passos rápidos, sibilo, guincho), slime (pulo e “ploft”), morcego (guinchos e asas), esqueletos (ossos chacoalhando, arco, golpe pesado, escudo de metal), espírito (sussurro, orbe, lamento) e a voz do eremita. Dá para trocar e ouvir em Editor → Criaturas. Nos scripts, use `api.sound('nome', self)`.
 
 ### Scripts
 Cada criatura, objeto, gatilho e item pode ter JavaScript com funções de evento:
@@ -115,7 +124,7 @@ function onDeath(self, api) { api.fx('explosao', self.x, self.y); api.drop('poca
 ```
 
 ### O projeto padrão
-Dois mapas ligados pela porta da mina: **Floresta das Ruínas** (cabana com porta, poço, cerca, torre, ruínas com esqueletos, lago com reflexo e escada, entrada de caverna inclinada com câmara de cristais, ponte sobre a lava, fogueiras-checkpoint, NPC, baús, itens) e **Caverna Profunda** (gerada: corredores, câmaras, estalactites, água, lava, cristais, cogumelos, teias, spawners de morcegos/aranhas/slimes/espíritos/esqueletos, baús com chave e bombas).
+Um mapa só: o mundo com todos os biomas e, no subsolo profundo, as quatro masmorras. A **Floresta das Ruínas** tem cabana com porta, poço, cerca, torre, ruínas com esqueletos, lago com reflexo e escada, entrada de caverna inclinada com câmara de cristais, ponte sobre a lava, fogueiras-checkpoint, NPC, baús e itens. A mina dela desce até a **Caverna Profunda**.
 
 ### Publicar na Steam
 Exporte o jogo pelo editor (**Mundo → Exportar jogo**) para `steam-build/game-data.js`. Depois rode `npm install` (só na primeira vez) e `npm run dist` em `steam-build/` para gerar `dist/win-unpacked/Floresta das Ruinas.exe`. Esse executável abre no menu inicial, sem editor, salva o progresso nas fogueiras e integra com o Steamworks (overlay e `api.achievement('ID')`). O passo a passo do envio está em `steam-build/README-STEAM.md`.

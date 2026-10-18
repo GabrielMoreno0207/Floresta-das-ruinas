@@ -29,11 +29,13 @@
   #uiFeed { position:absolute; right:16px; top:12px; text-align:right; }
   #uiFps { position:absolute; right:16px; bottom:8px; color:#6d7489; }
   #uiInv { position:absolute; inset:0; background:rgba(0,0,0,.6); display:none; place-items:center; pointer-events:auto; }
-  #uiInv.open { display:grid; } #invBox { background:rgba(6,7,13,.94); padding:6px; cursor:default; font-size:15px; }
+  #uiInv.open { display:grid; } #invBox { background:rgba(6,7,13,.94); padding:10px; cursor:default; font-size:clamp(11px, 1.05vw, 17px); line-height:1.12; }
+  #invBox .p3d { cursor:grab; } #invBox .p3d:active { cursor:grabbing; }
+  #ui, #ui * { user-select:none; -webkit-user-select:none; } /* clique duplo não seleciona texto da interface */
   #uiBubbles pre.bubble { position:fixed; transform:translate(-50%,-100%); pointer-events:none; white-space:pre; }
   #uiBubbles pre.say { font-size:15px; background:rgba(6,7,13,.82); padding:2px 4px; }
   #uiBubbles pre.tag { font-size:13px; background:rgba(6,7,13,.7); padding:1px 5px; }
-  #uiHot { font-size:17px; }
+  #uiHot { font-size:clamp(10px, 0.9vw, 15px); line-height:1.1; background:rgba(6,7,13,.55); padding:3px 6px; border-radius:4px; bottom:22px; }
   #invBox [data-i] { cursor:pointer; }
   #uiBoss { position:absolute; top:70px; left:50%; transform:translateX(-50%); font-size:15px; text-align:center; background:rgba(6,7,13,.7); padding:3px 10px; display:none; pointer-events:none; }
   #uiShop { position:absolute; inset:0; background:rgba(0,0,0,.6); display:none; place-items:center; pointer-events:auto; }
@@ -83,7 +85,12 @@
   #menu.open { display:grid; } #menu.title { background:none; place-items:end end; padding:0 5vw 9vh 0; }
   #menu.title .menu-box { background:rgba(6,7,13,.78); box-shadow:0 0 40px rgba(255,120,40,.12); }
   #titleArt { position:fixed; inset:0; z-index:29; display:none; pointer-events:none; background:#030305; }
-  #menu .menu-box { background:rgba(6,7,13,.9); padding:6px 8px; font-size:15px; }
+  #menu .menu-box { background:rgba(6,7,13,.9); padding:10px 14px; font-size:clamp(12px, 1vw, 16px); line-height:1.18; border-radius:6px; box-shadow:0 0 0 1px rgba(255,190,110,.08), 0 10px 50px rgba(0,0,0,.6); }
+  #menu .mi { border-radius:3px; transition:background .12s; }
+  #menu .mi.on { background:linear-gradient(90deg, rgba(255,175,70,.22), rgba(255,175,70,.04) 70%, transparent); text-shadow:0 0 8px rgba(255,170,60,.45); }
+  #menu .sec { color:#b08850; letter-spacing:.5px; }
+  #menu .p3d { cursor:default; }
+  #menu, #menu * { user-select:none; -webkit-user-select:none; }
   body.game-mode #help, body.game-mode #hud { display:none; }
   #icCv { display:block; width:100%; background:#000; border-radius:6px; margin:6px 0; cursor:crosshair; touch-action:none; }
   .glyphs { display:grid; grid-template-columns:repeat(14,1fr); gap:2px; }
@@ -98,7 +105,7 @@
 <canvas id="overlay"></canvas>
 <div id="ui"></div>
 <div id="hud"></div>
-<div id="help"><b>←→</b> andar · <b>Espaço</b> pular/duplo · <b>↓+Espaço</b> descer plataforma · <b>Shift</b> dash · <b>J</b> combo · <b>E</b> interagir · <b>Q</b> bomba · <b>1-5</b> hotbar · <b>I</b> inventário · <b>M</b> mapa · <b>F2</b> colisores · <b>C</b> criativo · <b>Tab</b> editor · <b>Esc</b> pausa</div>
+<div id="help"><b>←→</b> andar · <b>Espaço</b> pular/duplo · <b>↓+Espaço</b> descer plataforma · <b>Shift</b> dash · <b>J</b> combo · <b>E</b> interagir · <b>Q</b> bomba · <b>1-0</b> hotbar · <b>I</b> inventário · <b>M</b> mapa · <b>F2</b> colisores · <b>C</b> criativo · <b>Tab</b> editor · <b>Esc</b> pausa</div>
 <div id="panel"></div>
 <div id="menu"></div>
 <div id="creative"></div>
@@ -107,15 +114,19 @@
 <script src="js/audio.js"></script>
 <script src="js/renderer.js"></script>
 <script src="js/world.js"></script>
+<script src="js/arquitetura.js"></script>
+<script src="js/biomas.js"></script>
 <script src="js/physics.js"></script>
 <script src="js/fx.js"></script>
 <script src="js/items.js"></script>
 <script src="js/script.js"></script>
 <script src="js/entities.js"></script>
 <script src="js/sprites.js"></script>
+<script src="js/hero-sprite.js"></script>
 <script src="js/player.js"></script>
 <script src="js/project.js"></script>
 <script src="js/game.js"></script>
+<script src="js/hero3d.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/overlay.js"></script>
 <script src="js/build.js"></script>

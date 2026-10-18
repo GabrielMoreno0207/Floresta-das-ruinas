@@ -26,11 +26,14 @@
       }
     },
     apply(d) {
+      // saves antigos podem apontar para mapas de masmorra que agora fazem parte do mundo principal
       const w = E.Project.worlds[d.map] || E.Project.worlds[E.Project.startMap];
+      if (w.id !== d.map) Object.assign(d, w.spawn);
       w.spawn = { x: d.x, y: d.y };
       G().inv = new E.Inventory();
       G().inv.slots = d.inv || G().inv.slots;
-      G().inv.weapon = d.weapon || 'espada';
+      while (G().inv.slots.length < 25) G().inv.slots.push(null); // saves antigos tinham 20 espaços
+      G().inv.weapon = d.weapon === undefined ? 'espada' : d.weapon; // null = de mãos vazias
       G().inv.gear = d.gear || G().inv.gear;
       G().inv.light = d.light || null;
       G().inv.upg = d.upg || {};
@@ -101,7 +104,10 @@
         ['music', 'Música', 'bar', O.music],
         ['sfx', 'Efeitos', 'bar', O.sfx],
         ['font', 'Tamanho do glifo', 'num', G().fontSize],
-        ['glow', 'Brilho (bloom)', 'bar', (G().world.settings.glow || 1) / 2.5],
+        ['glow', 'Halo das luzes', 'bar', (G().world.settings.glow || 1) / 2.5],
+        ['grade', 'Paleta de cor (F8)', 'opt', (E.GRADES[O.grade ?? 1] || E.GRADES[0]).name],
+        ['filter', 'Filtro (tecla F7)', 'opt', E.FILTERS[O.filter] || E.FILTERS[0]],
+        ['outline', 'Contorno do herói', 'chk', O.outline],
         ['shake', 'Tremor de tela', 'chk', O.shake],
         ['fps', 'Mostrar FPS', 'chk', O.fps],
         ['creative', 'Modo criativo (tecla C)', 'chk', O.creative],
@@ -114,24 +120,53 @@
       this.sel = Math.max(0, Math.min(this.sel, its.length - 1));
       const W = 52;
       const L = [];
-      // menu principal: a cena do cavaleiro (title.js) fica por trás, também nas Opções abertas a partir dele
+      // menu principal: a cena do herói (title.js) fica por trás, também nas Opções abertas a partir dele
       const titleMode = this.kind === 'title' || (this.kind === 'opts' && this.back === 'title');
       if (E.TitleArt) titleMode ? E.TitleArt.show() : E.TitleArt.hide();
-      if (this.kind === 'title') L.push('<span class="fr">' + ' '.repeat(16) + '·  ·  ·  ✦  ·  ·  ·</span>', '');
+      const ICON = { cont: '▶', new: '✦', opts: '≡', quit: 'x', resume: '▶', title: '⌂', fs: '□', back: '◄' }; // só glifos de largura simples (não entortam a moldura)
+      const SEC = { master: 'SOM', font: 'VÍDEO', shake: 'JOGO' };
+      if (this.kind === 'title') L.push('<span class="fr">' + ' '.repeat(15) + '·  ·  ·  <span class="acc">✦</span>  ·  ·  ·</span>', '');
       its.forEach(([k, label, type, v], i) => {
+        if (this.kind === 'opts' && SEC[k]) {
+          if (i) L.push('');
+          L.push(`<span class="sec">── ${SEC[k]} ${'─'.repeat(W - 5 - SEC[k].length)}</span>`);
+        }
         const on = i === this.sel;
         let right = '';
         if (type === 'bar') right = `${E.asciiBar(v, 12)} ${String(Math.round(v * 100)).padStart(3)}%`;
-        else if (type === 'chk') right = v ? '<span class="acc">[■]</span>' : '<span class="fr">[ ]</span>';
-        else if (type === 'num') right = `<span class="fr">◄</span> ${v} <span class="fr">►</span>`;
-        const left = `${on ? '<span class="acc">▶</span>' : ' '} <span class="${on ? 'acc' : ''}">${esc(label)}</span>`;
-        L.push(`<span data-mi="${i}" class="mi">${E.asciiPad(left, W - (right ? 24 : 0))}${right ? E.asciiPad(right, 24) : ''}</span>`);
+        else if (type === 'chk') right = v ? '<span class="acc">[■] sim</span>' : '<span class="fr">[ ] não</span>';
+        else if (type === 'num' || type === 'opt') right = `<span class="fr">◄</span> ${v} <span class="fr">►</span>`;
+        const ic = ICON[k] ? `<span class="${on ? 'acc' : 'fr'}">${ICON[k]}</span> ` : '  ';
+        const left = `${on ? '<span class="acc">›</span>' : ' '} ${ic}<span class="${on ? 'acc' : ''}">${esc(label)}</span>`;
+        L.push(`<span data-mi="${i}" class="mi${on ? ' on' : ''}">${E.asciiPad(left, W - (right ? 24 : 0))}${right ? E.asciiPad(right, 24) : ''}</span>`);
+        // resumo do jogo salvo embaixo de "Continuar"
+        if (k === 'cont') {
+          const info = this.saveInfo();
+          if (info) L.push(`<span class="fr">     ${info}</span>`);
+        }
       });
       L.push('');
-      L.push('<span class="fr">[↑↓] escolher   [Enter] confirmar</span>', '<span class="fr">[←→] ajustar    [Esc] voltar</span>');
+      L.push('<span class="fr">[↑↓] escolher   [Enter] confirmar</span>', `<span class="fr">${this.kind === 'opts' ? '[←→] ajustar    ' : '[F11] tela cheia '}[Esc] voltar</span>`);
       const title = this.kind === 'title' ? '' : this.kind === 'pause' ? 'PAUSADO' : 'OPÇÕES';
-      $('#menu').innerHTML = `<pre class="ascii menu-box">${E.asciiBox(title, L, W, 'double')}</pre>`;
+      const box = E.asciiBox(title, L, W, 'double');
+      if (this.kind === 'pause') {
+        // pausa: o herói em 3D girando e os dados da partida ao lado do menu
+        const left = E.asciiBox(esc(G().name || 'Herói').toUpperCase(), this.pauseCard(), 30, 'double').split('\n'), right = box.split('\n');
+        const n = Math.max(left.length, right.length), out = [];
+        for (let i = 0; i < n; i++) out.push(E.asciiPad(left[i] || '', 34) + ' ' + (right[i] || ''));
+        $('#menu').innerHTML = `<pre class="ascii menu-box">${out.join('\n')}</pre>`;
+      } else $('#menu').innerHTML = `<pre class="ascii menu-box">${box}</pre>`;
       $('#menu').classList.toggle('title', titleMode);
+      clearInterval(this._spin);
+      if (this.kind === 'pause') {
+        this.rotY ??= 0.6;
+        this._spin = setInterval(() => {
+          if (E.UI.menuOpen !== 'pause' || this.kind !== 'pause') return clearInterval(this._spin);
+          this.rotY += 0.07;
+          const inv = G().inv, Lh = E.Hero3D ? E.Hero3D.lines(28, 20, this.rotY, inv.look(), inv.weaponDef(), performance.now() / 1000) : [];
+          document.querySelectorAll('#menu .p3d').forEach((el) => (el.innerHTML = Lh[+el.dataset.r] || ''));
+        }, 70);
+      }
       const m = $('#menu');
       m.onmousemove = (e) => {
         const it = e.target.closest('[data-mi]');
@@ -154,6 +189,42 @@
         this.adjust(-1);
       };
     },
+    // resumo do save: vida, moedas, onde o herói parou e há quanto tempo
+    saveInfo() {
+      const d = E.Save.load();
+      if (!d) return '';
+      const coins = (d.inv || []).reduce((n, q) => n + (q && q.id === 'moeda' ? q.qty || 1 : 0), 0);
+      return [`<span class="hp">♥</span> ${d.hp ?? '?'}`, `<span class="acc">o</span> ${coins}`, this.where(E.Project.worlds[d.map], d.x, d.y), d.t ? this.ago(d.t) : ''].filter(Boolean).join(' · ');
+    },
+    where(w, x, y) {
+      if (!w) return '';
+      const dg = w.dungeonAt && w.dungeonAt(x, y);
+      if (dg) return dg.name;
+      const b = (w.biomes || []).find((q) => x >= q.x0 && x < q.x1);
+      return b ? E.BIOME_NAMES[b.id] || b.id : w.name || '';
+    },
+    ago(t) {
+      const m = Math.round((Date.now() - t) / 60000);
+      return m < 1 ? 'agora' : m < 60 ? `há ${m} min` : m < 1440 ? `há ${Math.round(m / 60)} h` : `há ${Math.round(m / 1440)} d`;
+    },
+    // cartão da pausa: herói 3D + vida, moedas, defesa, arma, local e hora
+    pauseCard() {
+      const inv = G().inv, p = G().player, w = G().world, s = w.settings;
+      this.rotY ??= 0.6;
+      const L = (E.Hero3D ? E.Hero3D.lines(28, 20, this.rotY, inv.look(), inv.weaponDef(), performance.now() / 1000) : []).map((l, k) => `<span class="p3d" data-r="${k}">${l}</span>`);
+      L.push('---');
+      const hearts = '<span class="hp">' + '♥'.repeat(Math.max(0, Math.ceil(p.hp))) + '</span><span class="fr">' + '♡'.repeat(Math.max(0, p.maxHp - Math.ceil(p.hp))) + '</span>';
+      const wd = inv.weapon && E.Project.items[inv.weapon];
+      L.push(`<span class="fr">Vida  </span> ${hearts}`);
+      L.push(`<span class="fr">Moedas</span> <span class="acc">${inv.count('moeda')}</span>   <span class="fr">Defesa</span> ${inv.defense()}`);
+      L.push(`<span class="fr">Arma  </span> ${wd ? esc(inv.label(inv.weapon)) : '—'}`);
+      L.push(`<span class="fr">Local </span> ${esc(this.where(w, p.x, p.y))}`);
+      if (s.dayNight && s.sky !== 'Caverna') {
+        const h = s.hour ?? 0;
+        L.push(`<span class="fr">Hora  </span> ${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor((h % 1) * 60)).padStart(2, '0')} ${h >= 6 && h < 19 ? '☼' : '☾'}`);
+      }
+      return L;
+    },
     adjust(d) {
       const it = this.items()[this.sel];
       if (!it) return;
@@ -163,6 +234,8 @@
         else O[k] = Math.round(Math.max(0, Math.min(1, O[k] + d * 0.1)) * 10) / 10;
       } else if (it[2] === 'num' && k === 'font') E.setFontSize(Math.max(4, Math.min(14, G().fontSize + d)));
       else if (it[2] === 'chk') O[k] = !O[k];
+      else if (k === 'grade') O.grade = ((O.grade ?? 1) + d + E.GRADES.length) % E.GRADES.length;
+      else if (k === 'filter') O.filter = ((O.filter || 0) + d + E.FILTERS.length) % E.FILTERS.length;
       else return;
       E.saveOptions();
       E.Audio.play('menu');
@@ -203,10 +276,28 @@
     },
   };
 
+  // filtros de tela (índice = uFilter no shader)
+  E.FILTERS = ['Nenhum', 'CRT', 'Vivo', 'Pergaminho', 'Fósforo verde', 'Noite fria', '1-bit'];
   window.addEventListener('keydown', (e) => {
     if (e.code === 'F11') {
       e.preventDefault();
       fullscreen();
+    }
+    if (e.code === 'F8') {
+      e.preventDefault();
+      const O = E.Options;
+      O.grade = ((O.grade ?? 1) + (e.shiftKey ? -1 : 1) + E.GRADES.length) % E.GRADES.length;
+      E.saveOptions();
+      if (E.toast) E.toast('Paleta: ' + E.GRADES[O.grade].name);
+      if (E.UI.menuOpen) E.Menu.render();
+    }
+    if (e.code === 'F7') {
+      e.preventDefault();
+      const O = E.Options;
+      O.filter = ((O.filter || 0) + (e.shiftKey ? -1 : 1) + E.FILTERS.length) % E.FILTERS.length;
+      E.saveOptions();
+      if (E.toast) E.toast('Filtro: ' + E.FILTERS[O.filter]);
+      if (E.UI.menuOpen) E.Menu.render();
     }
     if (E.Editor && E.Editor.active) return;
     const M = E.Menu;

@@ -1,7 +1,9 @@
 'use strict';
 // Renderizador WebGL2 em duas passadas:
 //  1) luz por célula (com sombras por raymarch) em um FBO do tamanho da grade
-//  2) glifos por pixel: material -> glifo, céu procedural, reflexo na água, bloom, chuva, neblina
+//  2) glifos por pixel: material -> glifo, céu procedural, reflexo na água, halos, chuva, neblina
+//     (desenha em textura)
+//  3) final: color grading (LUT 3D), vinheta e filtro de tela
 (function () {
   const E = window.ENG;
 
@@ -24,13 +26,14 @@
   `;
 
   const LIGHT_FS = COMMON + `
-  uniform vec3 uAmb; uniform int uShadows;
+  uniform vec3 uAmb; uniform vec3 uCave; uniform int uShadows;
   out vec4 o;
   void main(){
     ivec2 c = ivec2(gl_FragCoord.xy);
     vec2 p = vec2(c) + .5;
     float skyv = texelFetch(uAux, cl(c), 0).a;
-    vec3 L = uAmb * (.04 + .96*skyv);
+    // longe do céu a luz vem do ambiente de caverna (penumbra), não do preto total
+    vec3 L = mix(uCave, uAmb, skyv);
     int f0 = flags(c);
     if ((f0 & 2) != 0) L *= 0.75; // camada de fundo recebe menos ambiente
     for (int i=0;i<32;i++){
@@ -65,6 +68,7 @@
   uniform int uAtlasCols;
   uniform float uHorizon;
   uniform vec4 uCel; uniform float uStarA; uniform float uDayK; uniform int uBiomeA; uniform int uBiomeB; uniform float uBiomeMix; uniform float uSnow;
+  uniform vec4 uRim; uniform int uFilter;
   out vec4 o;
 
   float atlas(int g, vec2 uv){
@@ -429,6 +433,36 @@
     if (ov > 0){ g = ov - 1; if (m == 0) col = vec3(1.); }
     float mask = g > 0 ? atlas(g, uv) : 0.;
 
+    // herói em primeiro plano + brilho das partículas quentes (VFX): olha as células vizinhas
+    bool hero = (fl & 8) != 0;
+    float near = 0., edge = 99.;
+    vec3 vfx = vec3(0.);
+    vec2 pc = vec2(c) + uv, ar = vec2(1., uCell.y / uCell.x), pp = pc * uCell;
+    for (int dy = -1; dy <= 1; dy++)
+      for (int dx = -3; dx <= 3; dx++){
+        if (dx == 0 && dy == 0) continue;
+        ivec2 n = c + ivec2(dx, dy);
+        vec4 an = texelFetch(uAux, cl(n), 0);
+        int fn = int(an.b*255.+.5);
+        vec2 d = (pc - vec2(n) - .5) * ar;
+        float dd = dot(d, d);
+        if (!hero && (fn & 8) != 0){
+          near = max(near, exp(-dd*.45));
+          // distância em pixels até o retângulo da célula do herói: vira a linha do contorno
+          vec2 q = abs(pp - (vec2(n) + .5) * uCell) - uCell * .5;
+          edge = min(edge, length(max(q, 0.)));
+        }
+        if ((fn & 4) != 0 && an.g > .97) vfx += texelFetch(uAlb, cl(n), 0).rgb * exp(-dd*1.3);
+      }
+    if ((fl & 4) != 0 && aux.g > .97){
+      // partícula quente: cor mais intensa sem estourar para branco
+      float mx = max(col.r, max(col.g, col.b));
+      col = col / max(mx, .001) * min(1.35, mx * 1.35);
+      vfx += alb.rgb * .5;
+    }
+    if (hero) col = max(col, alb.rgb * .6); // o herói nunca some no escuro
+    // contorno: faixa fina de ~1,5 px colada à silhueta do herói
+    float rim = 1. - smoothstep(.6, 1.8, edge);
     // bloom: halos suaves em espaço de pixel
     vec3 glow = vec3(0.);
     for (int i=0;i<32;i++){
@@ -440,6 +474,12 @@
       glow += uLC[i] * lp.w * (exp(-dd*14.)*.55 + exp(-dd*3.)*.12);
     }
     vec3 outc = bg + glow*uGlow*.55 + mask * col * (1. + dot(glow, vec3(.33))*uGlow*.6);
+    // bloom das partículas quentes: mantém a matiz (normaliza antes de somar)
+    float vm = max(vfx.r, max(vfx.g, vfx.b));
+    if (vm > 0.) outc += vfx / vm * min(vm, 1.2) * .16;
+    // cenário em volta do herói escurece (profundidade) e o contorno recorta a silhueta
+    outc = outc * (1. - near * .55 * uRim.a);
+    outc = mix(outc, uRim.rgb, rim * uRim.a);
 
     // chuva
     if (uRain > 0.){
@@ -474,11 +514,102 @@
       float fz = noise2(wc*vec2(.035,.09) + vec2(uTime*.08, 0.)) * smoothstep(.2, .9, frag.y/uRes.y);
       outc = mix(outc, uFogCol*(.25 + L*.25), clamp(fz*uFog*.55, 0., .7));
     }
+    // 1-bit precisa da máscara do glifo: fica aqui; os outros filtros, a vinheta e o grading são da passada final
+    if (uFilter == 6){
+      float l = dot(mask * col, vec3(.3,.59,.11));
+      outc = l > .06 || rim > .5 ? vec3(.93,.9,.82) : vec3(.07,.06,.09);
+    }
+    o = vec4(outc, 1.);
+  }`;
+
+  const POST_FS = `#version 300 es
+  precision highp float; precision highp sampler3D;
+  uniform sampler2D uScene; uniform sampler3D uLut;
+  uniform vec2 uRes; uniform float uLutK; uniform float uLutN; uniform int uFilter;
+  out vec4 o;
+  void main(){
+    vec2 fc = gl_FragCoord.xy, frag = vec2(fc.x, uRes.y - fc.y);
+    vec3 c = texelFetch(uScene, ivec2(fc), 0).rgb;
+    if (uFilter != 6){
+      if (uLutK > 0.) c = mix(c, texture(uLut, clamp(c, 0., 1.)*((uLutN - 1.)/uLutN) + .5/uLutN).rgb, uLutK);
+    }
     // vinheta
     vec2 q = frag/uRes - .5;
-    outc *= 1. - dot(q,q)*.65;
-    o = vec4(pow(outc, vec3(.95)), 1.);
+    c *= 1. - dot(q,q)*.65;
+    // filtros de tela
+    if (uFilter == 1){
+      // CRT: linhas de varredura e máscara RGB
+      c *= .78 + .22*sin(frag.y*3.1416);
+      int sub = int(mod(frag.x, 3.));
+      c *= vec3(sub==0?1.12:.92, sub==1?1.12:.92, sub==2?1.12:.92) * 1.12;
+    } else if (uFilter == 2){
+      // vivo: mais saturação e contraste
+      float l = dot(c, vec3(.3,.59,.11));
+      c = max(mix(vec3(l), c, 1.45), 0.);
+      c = c*c*(3.-2.*min(c, 1.))*.35 + c*.75;
+    } else if (uFilter == 3){
+      // pergaminho: tons de sépia
+      float l = dot(c, vec3(.3,.59,.11));
+      c = vec3(l*1.15, l*.95, l*.7) + vec3(.03,.02,0.);
+    } else if (uFilter == 4){
+      // monitor de fósforo verde
+      float l = dot(c, vec3(.3,.59,.11));
+      c = vec3(.25, 1., .4) * l * 1.3 * (.85 + .15*sin(frag.y*3.1416));
+    } else if (uFilter == 5){
+      // noite fria: sombras azuladas, luzes quentes preservadas
+      float l = dot(c, vec3(.3,.59,.11));
+      c = mix(c * vec3(.7,.85,1.15), c * vec3(1.1,1.,.9), smoothstep(.25, .7, l));
+    }
+    o = vec4(pow(max(c, 0.), vec3(.95)), 1.);
   }`;
+
+  // ---------- color grading: cada paleta vira uma LUT 3D gerada aqui ----------
+  // sat (saturação), con (curva S; negativo = mais lavado), lift/gain (preto/branco por canal),
+  // sh/hi (tom somado nas sombras / nas luzes), pal (quantiza para uma paleta fixa)
+  const PICO8 = ['000000', '1d2b53', '7e2553', '008751', 'ab5236', '5f574f', 'c2c3c7', 'fff1e8', 'ff004d', 'ffa300', 'ffec27', '00e436', '29adff', '83769c', 'ff77a8', 'ffccaa'].map((h) => [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255));
+  E.GRADES = [
+    { name: 'Neutro' },
+    { name: 'Forja', sat: 1.12, con: 0.25, lift: [0.02, 0.025, 0.045], gain: [1.02, 0.98, 0.92], sh: [-0.02, 0.015, 0.05], hi: [0.06, 0.03, -0.04] },
+    { name: 'Floresta', sat: 1.2, con: 0.2, lift: [0.01, 0.03, 0.03], gain: [1, 1.03, 0.9], sh: [-0.02, 0.04, 0.03], hi: [0.06, 0.05, -0.03] },
+    { name: 'Crepúsculo', sat: 1.15, con: 0.15, lift: [0.04, 0.01, 0.07], gain: [1.05, 0.94, 0.9], sh: [0.05, -0.02, 0.08], hi: [0.09, 0.02, -0.04] },
+    { name: 'Gélido', sat: 0.8, con: 0.15, lift: [0.02, 0.04, 0.07], gain: [0.92, 0.98, 1.05], sh: [-0.03, 0, 0.06], hi: [-0.02, 0.02, 0.05] },
+    { name: 'Brasa', sat: 1.3, con: 0.45, lift: [0.02, 0, 0], gain: [1.08, 0.95, 0.8], sh: [0.04, -0.01, -0.03], hi: [0.08, 0.02, -0.06] },
+    { name: 'Sonho', sat: 0.85, con: -0.25, lift: [0.08, 0.06, 0.09], gain: [1, 0.97, 1], sh: [0.03, 0, 0.05], hi: [0.04, 0.02, 0] },
+    { name: 'Noir', sat: 0, con: 0.5, lift: [0.01, 0.01, 0.02], gain: [1, 1, 1.04], sh: [0, 0, 0.03] },
+    { name: 'PICO-8', sat: 1.15, con: 0.1, pal: PICO8 },
+  ];
+  const LUT_N = 32;
+  function buildLut(P) {
+    const N = LUT_N, out = new Uint8Array(N * N * N * 4);
+    const luma = (c) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+    const sat = P.sat ?? 1, con = P.con || 0, lift = P.lift || [0, 0, 0], gain = P.gain || [1, 1, 1];
+    for (let b = 0; b < N; b++)
+      for (let g = 0; g < N; g++)
+        for (let r = 0; r < N; r++) {
+          let c = [r / (N - 1), g / (N - 1), b / (N - 1)];
+          let l = luma(c);
+          c = c.map((v, i) => {
+            v = Math.max(0, Math.min(1, l + (v - l) * sat));
+            v += (v * v * (3 - 2 * v) - v) * con;
+            return lift[i] + v * (gain[i] - lift[i]);
+          });
+          l = Math.max(0, Math.min(1, luma(c)));
+          c = c.map((v, i) => v + (P.sh ? P.sh[i] * (1 - l) * (1 - l) : 0) + (P.hi ? P.hi[i] * l * l : 0));
+          if (P.pal) {
+            // cor mais próxima da paleta (distância ponderada pela sensibilidade do olho)
+            let best = P.pal[0], bd = 1e9;
+            for (const q of P.pal) {
+              const d = 0.3 * (c[0] - q[0]) ** 2 + 0.59 * (c[1] - q[1]) ** 2 + 0.11 * (c[2] - q[2]) ** 2;
+              if (d < bd) (bd = d), (best = q);
+            }
+            c = best;
+          }
+          const o = ((b * N + g) * N + r) * 4;
+          for (let i = 0; i < 3; i++) out[o + i] = Math.round(Math.max(0, Math.min(1, c[i])) * 255);
+          out[o + 3] = 255;
+        }
+    return out;
+  }
 
   function compile(gl, type, src) {
     const s = gl.createShader(type);
@@ -529,6 +660,37 @@
       gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
       this.matTex = tex(gl, 4, 256, E.buildMaterialTable());
       this.fbo = gl.createFramebuffer();
+      this.post = program(gl, POST_FS);
+      this.lutTex = gl.createTexture();
+      this.setGrade(0);
+    },
+
+    setGrade(i) {
+      const gl = this.gl, P = E.GRADES[i] || E.GRADES[0];
+      if (this.gradeIx === i) return;
+      this.gradeIx = i;
+      gl.bindTexture(gl.TEXTURE_3D, this.lutTex);
+      for (const k of [gl.TEXTURE_WRAP_S, gl.TEXTURE_WRAP_T, gl.TEXTURE_WRAP_R]) gl.texParameteri(gl.TEXTURE_3D, k, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, P.pal ? gl.NEAREST : gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, P.pal ? gl.NEAREST : gl.LINEAR);
+      gl.texImage3D(gl.TEXTURE_3D, 0, gl.RGBA8, LUT_N, LUT_N, LUT_N, 0, gl.RGBA, gl.UNSIGNED_BYTE, buildLut(P));
+      this.lutOn = i > 0;
+    },
+
+    // alvo de render: textura + framebuffer
+    target(w, h, filter) {
+      const gl = this.gl, t = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, t);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      const fbo = gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      return { tex: t, fbo, w, h };
     },
 
     // atlas de glifos renderizado com a fonte escolhida, no tamanho exato da célula em pixels do dispositivo
@@ -588,6 +750,30 @@
       gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.lightTex, 0);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      // cena do tamanho da tela (o grading e os filtros são aplicados depois)
+      if (this.scene) gl.deleteTexture(this.scene.tex), gl.deleteFramebuffer(this.scene.fbo);
+      this.scene = this.target(W, H, gl.NEAREST);
+    },
+
+    // grading + filtro: da textura da cena para a tela
+    postFx(f) {
+      const gl = this.gl;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+      this.setGrade(f.grade || 0);
+      const P = this.post;
+      gl.useProgram(P.p);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, this.scene.tex);
+      gl.activeTexture(gl.TEXTURE2);
+      gl.bindTexture(gl.TEXTURE_3D, this.lutTex);
+      gl.uniform1i(P.u.uScene, 0);
+      gl.uniform1i(P.u.uLut, 2);
+      gl.uniform2f(P.u.uRes, this.canvas.width, this.canvas.height);
+      gl.uniform1f(P.u.uLutK, this.lutOn ? f.gradeK ?? 1 : 0);
+      gl.uniform1f(P.u.uLutN, LUT_N);
+      gl.uniform1i(P.u.uFilter, f.filter || 0);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
     },
 
     // f: { camCell:[x,y], off:[px,py], lights:[{x,y,r,i,c:[r,g,b]}] (em células da grade), amb, time, ... }
@@ -625,11 +811,13 @@
       gl.useProgram(this.light.p);
       common(this.light);
       gl.uniform3fv(this.light.u.uAmb, f.amb);
+      gl.uniform3fv(this.light.u.uCave, f.caveAmb || [0.2, 0.2, 0.26]);
       gl.uniform1i(this.light.u.uShadows, f.shadows ? 1 : 0);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
-      // passada 2: glifos
+      // passada 2: glifos (na textura da cena)
+      gl.bindFramebuffer(gl.FRAMEBUFFER, this.scene.fbo);
       gl.viewport(0, 0, this.canvas.width, this.canvas.height);
       const P = this.glyph;
       gl.useProgram(P.p);
@@ -664,10 +852,13 @@
       gl.uniform3fv(P.u.uSkyBot, f.sky.bot);
       gl.uniform3fv(P.u.uMoonCol, f.sky.moon);
       gl.uniform3fv(P.u.uFogCol, f.sky.fog);
+      gl.uniform4fv(P.u.uRim, f.rim || [0, 0, 0, 0]);
+      gl.uniform1i(P.u.uFilter, f.filter || 0);
       const PU = new Float32Array(16);
       (f.pushers || []).slice(0, 4).forEach((p, i) => PU.set([p.x, p.y, p.vx, 1], i * 4));
       gl.uniform4fv(P.u.uPush, PU);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
+      this.postFx(f);
     },
   };
 })();

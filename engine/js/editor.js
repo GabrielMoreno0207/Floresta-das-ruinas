@@ -9,6 +9,14 @@
 
   const STAMPS = {
     'Cabana com porta': (w, x, y) => E.Struct.cabin(w, x, y, E.rng(x | 1)),
+    'Casa enxaimel': (w, x, y) => E.Struct.house(w, x, y, E.rng(x | 1), { kind: 'enxaimel', role: 'comerciante' }),
+    'Casa de pedra': (w, x, y) => E.Struct.house(w, x, y, E.rng(x | 1), { kind: 'pedra', role: 'nobre', floors: 2 }),
+    'Casa de adobe': (w, x, y) => E.Struct.house(w, x, y, E.rng(x | 1), { kind: 'adobe', role: 'simples' }),
+    Estalagem: (w, x, y) => E.Struct.house(w, x, y, E.rng(x | 1), { kind: 'estalagem', role: 'estalagem', sign: 'Estalagem' }),
+    'Oficina do ferreiro': (w, x, y) => E.Struct.forge(w, x, y),
+    'Barraca de mercado': (w, x, y) => E.Struct.stall(w, x, y, [200, 60, 50], 'mercador'),
+    'Poste de rua': (w, x, y) => E.Struct.lampPost(w, x, y),
+    ...Object.fromEntries(Object.keys(E.PROPS || {}).filter((k) => E.PROPS[k]).map((k) => ['Objeto: ' + k, (w, x, y) => E.prop(w, k, x, y)])),
     'Porta de madeira': (w, x, y) => E.Struct.doorAt(w, x, y),
     'Entrada de caverna': (w, x, y) => E.Struct.caveEntrance(w, x, y, E.rng(x | 1)),
     'Poço de mina': (w, x, y) => E.Struct.mineShaft(w, x, y, 30),
@@ -1032,6 +1040,7 @@
     tab_mundo(el) {
       const P = E.Project, w = W(), s = w.settings;
       s.ambK ??= 1;
+      s.caveK ??= 1;
       el.innerHTML = `
         <h4>Mapas do jogo</h4>
         <div class="list">${Object.values(P.worlds).map((m) => `<div data-map="${m.id}" class="${m === w ? 'on' : ''}">${m.id === P.startMap ? '★ ' : ''}${esc(m.name)} <small>${m.id} · ${m.W}×${m.H}</small></div>`).join('')}</div>
@@ -1125,6 +1134,7 @@
       form($('#fv'), s, [
         ['sky', 'Céu', 'select', Object.keys(E.SKIES)],
         ['ambK', 'Luz ambiente', 'range', [0, 2.5, 0.01]],
+        ['caveK', 'Luz nas cavernas', 'range', [0, 3, 0.01]],
         ['glow', 'Bloom', 'range', [0, 2.5, 0.01]],
         ['fog', 'Neblina', 'range', [0, 1.5, 0.01]],
         ['rain', 'Chuva', 'range', [0, 1, 0.01]],

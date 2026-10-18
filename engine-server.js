@@ -10,7 +10,7 @@ const ROOT = __dirname;
 const SB = path.join(ROOT, 'steam-build');
 const PORT = +process.env.PORT || 5173;
 const URL = `http://127.0.0.1:${PORT}/engine/index.html?editor`;
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.md': 'text/plain; charset=utf-8', '.txt': 'text/plain; charset=utf-8', '.woff2': 'font/woff2' };
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.md': 'text/plain; charset=utf-8', '.txt': 'text/plain; charset=utf-8', '.woff2': 'font/woff2', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav' };
 
 const pkgPath = path.join(SB, 'package.json');
 const pkg = () => JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
@@ -115,7 +115,19 @@ const server = http.createServer(async (req, res) => {
         res.writeHead(404);
         return res.end('não encontrado');
       }
-      res.writeHead(200, { 'Content-Type': MIME[path.extname(f).toLowerCase()] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
+      const type = MIME[path.extname(f).toLowerCase()] || 'application/octet-stream';
+      // pedidos parciais (Range): o navegador usa para repetir e voltar ao início das músicas
+      const m = /bytes=(\d*)-(\d*)/.exec(req.headers.range || '');
+      if (m) {
+        const a = m[1] ? +m[1] : 0, b = m[2] ? Math.min(+m[2], st.size - 1) : st.size - 1;
+        if (a >= st.size || a > b) {
+          res.writeHead(416, { 'Content-Range': `bytes */${st.size}` });
+          return res.end();
+        }
+        res.writeHead(206, { 'Content-Type': type, 'Content-Range': `bytes ${a}-${b}/${st.size}`, 'Content-Length': b - a + 1, 'Accept-Ranges': 'bytes', 'Cache-Control': 'no-cache' });
+        return fs.createReadStream(f, { start: a, end: b }).pipe(res);
+      }
+      res.writeHead(200, { 'Content-Type': type, 'Content-Length': st.size, 'Accept-Ranges': 'bytes', 'Cache-Control': 'no-cache' });
       fs.createReadStream(f).pipe(res);
     });
   } catch (e) {

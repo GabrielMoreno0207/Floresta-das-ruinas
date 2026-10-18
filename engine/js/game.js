@@ -115,6 +115,10 @@
     for (const l of W.lights)
       if (l.embers && inView(l.x, l.y, 10) && Math.random() < dt * 6)
         G.parts.push({ x: l.x + (Math.random() - 0.5) * 3, y: l.y, vx: (Math.random() - 0.5) * 4, vy: -6 - Math.random() * 8, life: 1.2 + Math.random(), max: 2, g: 0, drag: 1, ch: Math.random() < 0.5 ? '.' : "'", c: [1, 0.55, 0.2], em: 1, wob: 1 });
+    // fumaça de chaminés (pontos `smoke` do mapa): sobe devagar, abre e some
+    for (const s of W.smokes || [])
+      if (inView(s.x, s.y, 30) && Math.random() < dt * 3)
+        G.parts.push({ x: s.x + (Math.random() - 0.5) * 2, y: s.y, vx: 2 + Math.random() * 3, vy: -5 - Math.random() * 3, life: 2.5 + Math.random() * 1.5, max: 4, g: 0, drag: 0.7, ch: 'oO.'[(Math.random() * 3) | 0], c: [0.42, 0.4, 0.44], em: 0, wob: 1 });
     let flies = 0;
     for (const q of G.parts) if (q.fly) flies++;
     if (flies < 22 && Math.random() < dt * 8) {
@@ -174,7 +178,7 @@
         } else if (solid) aux[o + 2] = 1;
       }
     }
-    const put = (wx, wy, rgb, glyph, em, mat = E.MAT.INK) => {
+    const put = (wx, wy, rgb, glyph, em, mat = E.MAT.INK, flag = 4) => {
       const x = Math.floor(wx) - ccx, y = Math.floor(wy) - ccy;
       if (x < 0 || y < 0 || x >= cols || y >= rows) return;
       const o = (y * cols + x) * 4;
@@ -184,7 +188,7 @@
       alb[o + 3] = mat;
       aux[o] = glyph != null && glyph >= 0 ? glyph + 1 : 0;
       aux[o + 1] = em || 0;
-      aux[o + 2] = 4;
+      aux[o + 2] = flag;
       aux[o + 3] = W.skyAt(Math.floor(wx), Math.floor(wy));
     };
     G.put = put;
@@ -197,7 +201,7 @@
           let rgb = c;
           if (o.tint) rgb = [c[0] * (1 - o.k) + o.tint[0] * 255 * o.k, c[1] * (1 - o.k) + o.tint[1] * 255 * o.k, c[2] * (1 - o.k) + o.tint[2] * 255 * o.k];
           if (o.mul != null) rgb = [rgb[0] * o.mul, rgb[1] * o.mul, rgb[2] * o.mul];
-          put(x0 + i, y0 + j, rgb, c[3], o.em || 0);
+          put(x0 + i, y0 + j, rgb, c[3], c[4] ? 255 : o.em || 0, undefined, o.flag); // c[4]: célula brilhante (rastro do golpe)
         }
     };
     const text = (s, x, y, rgb, em = 220) => {
@@ -262,7 +266,8 @@
     // herói
     const cells = E.Player.render(p, G.dt);
     const blink = p.invuln > 0 && p.hurtT <= 0 && p.dashT <= 0 && Math.floor(G.time * 16) % 2;
-    if (!blink) drawCells(cells, p.x, p.y + 0.5, { tint: p.hurtT > 0.25 ? [1, 0.3, 0.2] : null, k: 0.5 });
+    // flag 8 = herói: o shader desenha o contorno e escurece o cenário em volta
+    if (!blink) drawCells(cells, p.x, p.y + 0.5, { tint: p.hurtT > 0.25 ? [1, 0.3, 0.2] : null, k: 0.5, flag: E.Options.outline === false ? 4 : 12 });
     // camada da frente
     for (let y = 0; y < rows; y++) {
       const wy = ccy + y;
@@ -286,7 +291,8 @@
     for (const q of G.parts) {
       const a = Math.min(1, q.life / (q.max * 0.4));
       const blinkF = q.fly ? 0.5 + 0.5 * Math.sin(G.time * 4 + q.seed) : 1;
-      put(q.x, q.y, q.c.map((v) => v * 255 * a * blinkF), E.glyphIndex(q.ch), q.em ? Math.round(255 * Math.min(1, q.em)) : 0);
+      // partícula `hot` (VFX de combate) usa emissão 255: o shader estoura a cor e espalha brilho nas células vizinhas
+      put(q.x, q.y, q.c.map((v) => v * 255 * a * blinkF), E.glyphIndex(q.ch), q.hot ? 255 : q.em ? Math.round(240 * Math.min(1, q.em)) : 0);
     }
     // nome e prompt de interação
     if (G.name) text(G.name, p.x, p.y - p.h - 3, [235, 235, 245], 200);
@@ -401,6 +407,17 @@
         G.biomeId = biome.id;
       }
     }
+    // masmorra onde o herói está (no subsolo profundo do mesmo mapa)
+    const dg = G.world.dungeonAt ? G.world.dungeonAt(G.player.x, G.player.y) : null;
+    if ((dg ? dg.id : null) !== (G.dungeonId ?? null)) {
+      if (dg) E.UI.message('— ' + dg.name + ' —', 2.5);
+      G.dungeonId = dg ? dg.id : null;
+    }
+    // penumbra das cavernas: nunca preto total, tingida pelo tema da masmorra
+    const caveTh = dg ? dg.amb : s.cave && E.CAVE_THEMES[s.cave.theme] ? E.CAVE_THEMES[s.cave.theme].amb : [1, 1, 1];
+    const caveK = s.caveK ?? 1;
+    G.caveAmb = (G.caveAmb || caveTh).map((v, k) => v + (caveTh[k] - v) * Math.min(1, dt * 1.5));
+    const caveAmb = [0.2, 0.2, 0.26].map((v, k) => v * caveK * G.caveAmb[k]);
     const bId = biome ? biome.id : '';
     const CODE = { floresta: 0, deserto: 1, neve: 2, oceano: 3, praia: 3, oceano_gelado: 3, floresta_grande: 4, castelo: 5 };
     // fundo: bioma atual + vizinho, misturados perto da fronteira (faixa de 160 células)
@@ -434,6 +451,7 @@
       off: [(G.cam.x - ccx) * r.cw, (G.cam.y - ccy) * r.ch],
       lights: gatherLights(ccx, ccy),
       amb: (day ? day.amb.map((v) => v * (s.ambK ?? 1)) : s.amb).map((v) => v + (G.flash > 0 ? G.flash * 3 : 0)),
+      caveAmb: caveAmb.map((v) => v + (G.flash > 0 ? G.flash * 3 : 0)),
       time: G.time,
       glow: s.glow,
       rain: s.rain * (1 - wOf('deserto') - wOf('neve')),
@@ -448,6 +466,9 @@
       biomeB,
       biomeMix,
       snow,
+      rim: E.Options.outline === false || (E.Editor && E.Editor.active) ? [0, 0, 0, 0] : [0.95, 0.92, 0.8, 0.55],
+      filter: E.Options.filter || 0,
+      grade: E.Options.grade ?? 1,
       pushers: [G.player, ...E.Ents.list.filter((e) => e.kind === 'creature')].filter((o) => inView(o.x, o.y, 5)).slice(0, 4).map((o) => ({ x: o.x, y: o.y, vx: o.vx })),
     });
     E.Overlay.draw(ccx, ccy);
@@ -477,6 +498,10 @@
     if (e.button !== 0 || (E.Editor && E.Editor.active) || E.UI.invOpen || E.UI.menuOpen || E.UI.shopOpen) return;
     if (e.target && e.target.closest && e.target.closest('#uiHot,#uiInv,#menu,#panel')) return;
     G.pressed.Mouse0 = true;
+    G.keys.Mouse0 = true; // segurado (o arco carrega enquanto o botão está pressionado)
+  });
+  window.addEventListener('mouseup', (e) => {
+    if (e.button === 0) G.keys.Mouse0 = false;
   });
   window.addEventListener('blur', () => (G.keys = {}));
 })();

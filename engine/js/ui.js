@@ -79,6 +79,7 @@
     return rows;
   };
 
+  E.HOTBAR = 10; // espaços da hotbar (os primeiros do inventário)
   E.UI = {
     invOpen: false,
     menuOpen: false,
@@ -99,7 +100,32 @@
           this.refresh();
         }
       });
+      // herói 3D do inventário: arrastar com o mouse gira; os botões ◄ ► giram 45°
+      this.rotY = 0.5;
+      this.rotAuto = true;
+      box.addEventListener('mousedown', (e) => {
+        if (!e.target.closest('.p3d')) return;
+        this._rotDrag = { x: e.clientX, y0: this.rotY };
+        this.rotAuto = false;
+        e.preventDefault();
+      });
+      window.addEventListener('mousemove', (e) => {
+        if (!this._rotDrag) return;
+        this.rotY = this._rotDrag.y0 + (e.clientX - this._rotDrag.x) * 0.016;
+        this.updateHero3D();
+      });
+      window.addEventListener('mouseup', () => {
+        if (this._rotDrag) setTimeout(() => (this.rotAuto = true), 2500); // volta a girar sozinho depois de um tempo
+        this._rotDrag = null;
+      });
       box.addEventListener('click', (e) => {
+        const rb = e.target.closest('[data-rot]');
+        if (rb) {
+          this.rotY += (+rb.dataset.rot * Math.PI) / 4;
+          this.rotAuto = false;
+          E.Audio.play('menu', { gap: 0.04 });
+          this.updateHero3D();
+        }
         const s = e.target.closest('[data-i]');
         if (s) this.useSel();
         const eq = e.target.closest('[data-eq]');
@@ -186,8 +212,9 @@
       if (st.length) lines.push(st.join(' '));
       $('#uiTop').innerHTML = E.asciiBox(esc(G().name || 'Herói'), lines, Math.max(18, p.maxHp + 8), 'single');
       // hotbar
-      const rows = ['', '', ''];
-      inv.slots.slice(0, 5).forEach((s, i) => slotLines(s, i, i === inv.hot, i + 1).forEach((l, k) => (rows[k] += l)));
+      // 10 espaços grandes (teclas 1–9 e 0), com o ícone inteiro como no inventário
+      const rows = ['', '', '', '', '', '', ''];
+      inv.slots.slice(0, E.HOTBAR).forEach((s, i) => slotBig(s, i, i === inv.hot, (i + 1) % 10).forEach((l, k) => (rows[k] += l)));
       $('#uiHot').innerHTML = rows.join('\n');
       if (this.invOpen) this.renderInventory();
     },
@@ -203,7 +230,7 @@
       const ctx = cv.getContext('2d', { willReadFrequently: true });
       ctx.clearRect(0, 0, W, H);
       const img = E.Project.player.image;
-      if (img && img.src) E.drawImageHero(ctx, W, H, img, 'idle', performance.now() / 1000, 1);
+      if (img && img.src) E.drawImageHero(ctx, W, H, img, 'idle', performance.now() / 1000, 1, { variant: G().inv.weaponDef().shape, look: G().inv.look(), weapon: G().inv.weaponDef() });
       else {
         const fcv = (this._pfcv ||= document.createElement('canvas'));
         fcv.width = W;
@@ -264,13 +291,13 @@
       };
       // coluna da direita: grade de itens
       const L = [];
-      for (let r = 0; r < 4; r++) {
+      for (let r = 0; r < Math.ceil(inv.slots.length / 5); r++) {
         const rows = ['', '', '', '', '', '', ''];
         for (let c = 0; c < 5; c++) {
           const i = r * 5 + c;
-          slotBig(inv.slots[i], i, i === this.invSel, r === 0 ? c + 1 : null).forEach((l, k) => (rows[k] += l));
+          slotBig(inv.slots[i], i, i === this.invSel, i < E.HOTBAR ? (i + 1) % 10 : null).forEach((l, k) => (rows[k] += l));
         }
-        if (r === 0) rows[3] += ' <span class="fr">←hotbar</span>';
+        if (r * 5 < E.HOTBAR) rows[3] += ' <span class="fr">←hotbar</span>';
         L.push(...rows);
       }
       L.push('---');
@@ -299,21 +326,31 @@
       L.push('<span class="fr">[Enter]</span> usar  <span class="fr">[X]</span> largar  <span class="fr">[setas]</span> mover');
       L.push('<span class="fr">[clique]</span> usar  <span class="fr">[dir.]</span> largar  <span data-act="close" class="btn">[I] fechar</span>');
       const right = E.asciiBox('INVENTÁRIO', L, W, 'double').split('\n');
-      // coluna da esquerda: retrato + equipamento
-      const PL = this.heroPortrait();
+      // coluna da esquerda: herói em 3D ASCII (gira) + equipamento
+      const PW = 44, PH = 34;
+      const PL = E.Hero3D ? E.Hero3D.lines(PW, PH, this.rotY, inv.look(), inv.weaponDef(), performance.now() / 1000).map((l, k) => `<span class="p3d" data-r="${k}">${l}</span>`) : this.heroPortrait();
+      PL.push(`<span data-rot="-1" class="btn">[◄]</span> <span class="fr">arraste para girar</span> <span data-rot="1" class="btn">[►]</span>`);
       PL.push('---');
       const eq = [['cabeca', 'Cabeça'], ['corpo', 'Corpo '], ['pes', 'Pés   ']];
       for (const [k, lab] of eq) PL.push(`<span data-eq="${k}" class="mi"><span class="fr">${lab}</span> [${name(inv.gear && inv.gear[k], 20)}]</span>`);
-      PL.push(`<span class="fr">Arma  </span> [${name(inv.weapon, 20)}]`);
+      PL.push(`<span data-eq="arma" class="mi"><span class="fr">Arma  </span> [${name(inv.weapon, 20)}]</span>`);
       PL.push(`<span class="fr">Luz   </span> [${name(inv.light, 20)}]`);
       const def = inv.defense(), sp = Math.round((inv.speedMul() - 1) * 100);
       PL.push(`<span class="fr">Defesa</span> ${E.asciiBar(def / 4, 8)} ${def}   <span class="fr">Vel.</span> ${sp >= 0 ? '+' : ''}${sp}%`);
-      const left = E.asciiBox(esc(G().name || 'Herói').toUpperCase(), PL, 30, 'double').split('\n');
-      const lw = 34, n2 = Math.max(left.length, right.length);
+      const left = E.asciiBox(esc(G().name || 'Herói').toUpperCase(), PL, PW, 'double').split('\n');
+      const lw = PW + 4, n2 = Math.max(left.length, right.length);
       const out = [];
       for (let k = 0; k < n2; k++) out.push(E.asciiPad(left[k] || '', lw) + ' ' + (right[k] || ''));
       $('#invBox').innerHTML = out.join('\n');
       this._invT = performance.now();
+    },
+    // gira o herói 3D trocando só as linhas dele (os espaços de item continuam os mesmos elementos)
+    updateHero3D() {
+      this._h3T = performance.now();
+      const rows = document.querySelectorAll('#invBox .p3d');
+      if (!rows.length || !E.Hero3D) return;
+      const inv = G().inv, L = E.Hero3D.lines(44, 34, this.rotY, inv.look(), inv.weaponDef(), performance.now() / 1000);
+      rows.forEach((el) => (el.innerHTML = L[+el.dataset.r] || ''));
     },
     // barra de vida do chefe acordado
     bossBar() {
@@ -335,7 +372,8 @@
     tick(dt) {
       this.bubbles();
       this.bossBar();
-      if (this.invOpen && performance.now() - (this._invT || 0) > 160) this.renderInventory();
+      if (this.invOpen && this.rotAuto && !this._rotDrag) this.rotY += dt * 0.7;
+      if (this.invOpen && performance.now() - (this._h3T || 0) > 60) this.updateHero3D();
       if (this.msgT > 0) {
         this.msgT -= dt;
         if (this.msgT <= 0) $('#uiMsg').classList.remove('show');
@@ -453,6 +491,11 @@
             s += '<span class="acc">@</span>';
             continue;
           }
+          const gate = (w.dungeons || []).find((d) => Math.abs(x - d.gate.x) < sx / 2 + 1 && Math.abs(y - d.gate.y) < sy);
+          if (gate) {
+            s += '<span style="color:#ffcf5a">▼</span>';
+            continue;
+          }
           let m = w.get('main', x, y);
           if (!m) {
             const b = w.get('back', x, y);
@@ -468,7 +511,9 @@
         lines.push(s);
       }
       const legend = (w.biomes || []).map((b) => (E.BIOME_NAMES[b.id] || b.id)).join(' · ');
-      lines.push('---', `<span class="fr">${esc(legend)}</span>`, '<span class="acc">@</span> você   <span class="fr">[M] fechar</span>');
+      lines.push('---', `<span class="fr">${esc(legend)}</span>`);
+      if (w.dungeons && w.dungeons.length) lines.push(`<span style="color:#ffcf5a">▼</span> <span class="fr">entradas: ${esc(w.dungeons.map((d) => d.name).join(' · '))}</span>`);
+      lines.push('<span class="acc">@</span> você   <span class="fr">[M] fechar</span>');
       el.innerHTML = `<pre class="ascii">${E.asciiBox('MAPA — ' + esc(w.name), lines, MW, 'double')}</pre>`;
     },
     // ---------- loja do mercador ----------

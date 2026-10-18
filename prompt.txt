@@ -1,0 +1,313 @@
+# Aprimoramento Visual do Mundo ASCII: NPCs, Biomas e Arquitetura Medieval
+
+Atue como um artista técnico de jogos 2D, especialista em pixel art baseada em caracteres ASCII, direção de arte medieval, environmental storytelling e design de personagens para jogos sandbox.
+
+Estou desenvolvendo um jogo 2D em ASCII, inspirado em Terraria, utilizando Electron e JavaScript.
+
+Quero elevar significativamente a qualidade visual do jogo, tornando os NPCs mais detalhados, os biomas mais ricos visualmente e as construções medievais mais elaboradas, variadas e reconhecíveis.
+
+Antes de modificar qualquer código ou recurso visual, analise como o jogo representa personagens, terrenos, objetos, construções, cores, animações e elementos decorativos.
+
+Trabalhe sobre os sistemas e recursos existentes. Não recrie a engine, não altere a identidade visual do jogo e não implemente geração procedural de mundos.
+
+## 1. NPCs com maior riqueza de detalhes em ASCII
+
+Melhore o design visual dos NPCs para que cada personagem tenha uma silhueta reconhecível, personalidade própria e detalhes que permitam identificá-lo mesmo em uma resolução pequena.
+
+Não quero NPCs representados apenas por uma letra genérica ou por combinações extremamente simples de caracteres.
+
+Utilize agrupamentos de caracteres ASCII para construir personagens visualmente ricos, mantendo a proporção adequada ao sistema de renderização existente.
+
+### Anatomia e silhueta
+
+Trabalhe os seguintes elementos:
+- Cabeça com formato e proporções coerentes.
+- Cabelos com diferentes cortes, comprimentos e texturas.
+- Barbas, bigodes e costeletas.
+- Olhos e expressões faciais, quando a resolução permitir.
+- Capuzes, chapéus, capacetes e coroas.
+- Ombros, braços, tronco, cintura e pernas.
+- Mãos, luvas, botas e acessórios.
+- Roupas com camadas, dobras e bordas visíveis.
+- Equipamentos e objetos carregados pelo personagem.
+
+Use caracteres como `@`, `O`, `o`, `/`, `\`, `|`, `(`, `)`, `#`, `=`, `^`, `v` e outros símbolos compatíveis para construir formas mais expressivas.
+
+Esses caracteres são apenas referências. Escolha os símbolos de acordo com a anatomia, a legibilidade e a paleta de caracteres do jogo.
+
+### Classes de NPCs medievais
+
+Aprimore os personagens existentes e, quando houver suporte para novos recursos visuais, prepare variações para:
+
+- Ferreiros com aventais, martelos e roupas de trabalho.
+- Mercadores com bolsas, mantos e mercadorias.
+- Ferreiros de armas e armeiros.
+- Alquimistas com robes, frascos e acessórios.
+- Magos com mantos, capuzes, cajados e símbolos arcanos.
+- Curandeiros com vestimentas e bolsas de ervas.
+- Camponeses com roupas simples, chapéus e ferramentas.
+- Guardas com armaduras, escudos e lanças.
+- Cavaleiros com armaduras ornamentadas.
+- Nobres com roupas elaboradas e acessórios.
+- Marinheiros com roupas de viagem, chapéus e cordas.
+- Caçadores com capas, arcos e equipamentos.
+- Mineiros com lanternas, capacetes e ferramentas.
+- Monges com túnicas e símbolos religiosos fictícios.
+- Personagens misteriosos com vestimentas incomuns.
+
+Cada profissão deve possuir elementos visuais característicos, sem depender exclusivamente de uma cor diferente.
+
+### Riqueza visual dos personagens
+
+Utilize contrastes entre roupas, pele, cabelos, equipamentos e acessórios.
+
+Crie variações de materiais:
+- Tecidos com bordas e camadas.
+- Couro com cintos, bolsas e fivelas.
+- Metal com capacetes, placas e rebites.
+- Madeira em cajados, ferramentas e armas.
+- Peles e mantos com silhuetas irregulares.
+- Joias e ornamentos com símbolos distintos.
+
+Evite adicionar caracteres indiscriminadamente. Cada símbolo deve contribuir para a anatomia, o equipamento ou a personalidade do NPC.
+
+### Animações e poses
+
+Quando o sistema de animação existente permitir, aprimore:
+- Caminhada com variação dos membros.
+- Respiração ou movimento sutil em personagens parados.
+- Animação de trabalho para ferreiros e artesãos.
+- Gestos para mercadores e personagens que conversam.
+- Poses de combate para guardas e guerreiros.
+- Movimentos de cajados e acessórios para magos.
+
+Preserve as proporções entre os quadros de animação e evite alterações aleatórias na silhueta.
+
+## 2. Biomas visualmente mais ricos
+
+Aprimore a apresentação dos biomas existentes para que cada região tenha uma identidade visual forte e uma composição ambiental própria.
+
+Não altere o sistema de geração do mundo. Trabalhe com os biomas, os terrenos e os recursos já existentes.
+
+### Florestas
+
+- Árvores com troncos e copas de diferentes formatos.
+- Raízes expostas, galhos e arbustos.
+- Vegetação rasteira, flores e cogumelos.
+- Troncos caídos e madeira deteriorada.
+- Pequenas áreas com folhas acumuladas.
+- Variação visual entre árvores jovens e antigas.
+- Vegetação mais densa em áreas específicas.
+
+### Desertos
+
+- Cactos, arbustos secos e plantas resistentes.
+- Rochas desgastadas pelo vento.
+- Dunas com contornos irregulares.
+- Ossos, madeira ressecada e ruínas parcialmente soterradas, quando compatíveis com o mundo.
+- Pequenas variações de textura entre areia, pedra e solo seco.
+
+### Regiões congeladas
+
+- Árvores com galhos expostos.
+- Neve acumulada sobre superfícies.
+- Cristais e formações de gelo.
+- Pedras parcialmente cobertas por neve.
+- Pequenas estalactites e estalagmites de gelo.
+- Vegetação adaptada ao frio.
+
+### Pântanos
+
+- Árvores retorcidas e raízes expostas.
+- Vegetação aquática.
+- Água escura, lama e poças.
+- Troncos parcialmente submersos.
+- Cipós, cogumelos e plantas incomuns.
+- Pequenos elementos que transmitam um ambiente antigo e úmido.
+
+### Regiões subterrâneas
+
+- Formações rochosas irregulares.
+- Cristais com diferentes silhuetas.
+- Raízes atravessando o teto.
+- Estalactites e estalagmites.
+- Depósitos minerais visualmente distinguíveis.
+- Lagos subterrâneos e margens rochosas.
+- Vegetação subterrânea quando fizer sentido.
+
+### Regras de direção de arte
+
+Cada bioma deve ser reconhecível pela composição de suas formas, texturas, objetos e cores.
+
+Evite repetir exatamente a mesma árvore, rocha ou planta por toda a região.
+
+Crie variações visuais dos recursos existentes, respeitando seus limites técnicos.
+
+Utilize detalhes ambientais para transmitir a idade, o clima, a umidade, a riqueza e a periculosidade de cada região.
+
+Não transforme o cenário em uma massa de caracteres sem hierarquia visual. Preserve áreas de respiro e contraste para que NPCs, inimigos, objetos e caminhos continuem fáceis de identificar.
+
+## 3. Arquitetura medieval detalhada
+
+Melhore as construções existentes e seus recursos visuais para que pareçam estruturas medievais construídas por pessoas, e não simples retângulos de pedra ou madeira.
+
+Trabalhe fachadas, telhados, portas, janelas, fundações, suportes, decoração e sinais de desgaste.
+
+### Casas medievais
+
+Crie maior riqueza visual em:
+- Casas de madeira com vigas e encaixes aparentes.
+- Casas de pedra com blocos de tamanhos variados.
+- Telhados inclinados com telhas ou palha.
+- Chaminés, fumaça e aberturas.
+- Portas reforçadas e janelas com molduras.
+- Varandas, escadas e pequenas cercas.
+- Vasos, barris, caixas e lenha.
+- Placas comerciais e luminárias.
+- Paredes com reparos, manchas e desgaste.
+
+Diferencie casas simples, residências de comerciantes, casas de artesãos e moradias de pessoas importantes.
+
+### Ferreiros e oficinas
+
+Inclua detalhes visuais como:
+- Fornalhas e chaminés.
+- Bigornas, martelos e ferramentas.
+- Suportes com armas.
+- Barris, caixas e pilhas de carvão.
+- Bancadas de trabalho.
+- Estruturas de madeira e pedra.
+- Sinais de fuligem e desgaste pelo uso.
+
+A construção deve permitir reconhecer imediatamente sua função.
+
+### Tendas, mercados e estalagens
+
+Aprimore:
+- Tecidos, lonas e suportes de madeira.
+- Bancadas com mercadorias.
+- Barris, cestos e caixas.
+- Placas e letreiros.
+- Mesas, bancos e luminárias.
+- Fachadas com características próprias.
+- Variedade entre estabelecimentos comerciais.
+
+### Ruínas medievais
+
+As ruínas devem transmitir abandono, idade e degradação.
+
+Inclua:
+- Paredes parcialmente desmoronadas.
+- Colunas quebradas.
+- Arcos incompletos.
+- Pedras deslocadas e blocos caídos.
+- Escadarias danificadas.
+- Vegetação crescendo entre as pedras.
+- Vigas expostas e madeira apodrecida.
+- Fundações parcialmente enterradas.
+- Portas destruídas e passagens obstruídas.
+- Símbolos antigos, inscrições e ornamentos desgastados.
+
+Evite criar ruínas que sejam apenas construções intactas com alguns buracos aleatórios.
+
+A degradação deve respeitar a estrutura arquitetônica. Telhados podem ter cedido, paredes podem apresentar rachaduras e algumas áreas podem ter desabado completamente.
+
+### Castelos e fortalezas
+
+Desenvolva uma linguagem arquitetônica medieval reconhecível.
+
+Inclua:
+- Torres de diferentes alturas.
+- Muralhas com ameias.
+- Portões reforçados.
+- Torres de vigia.
+- Pontes levadiças, quando compatíveis com o sistema.
+- Arcos e passagens.
+- Pátios internos.
+- Escadarias e corredores.
+- Bandeiras, estandartes e brasões fictícios.
+- Janelas estreitas nas torres.
+- Salões e câmaras internas.
+- Balcões, sacadas e telhados ornamentados.
+- Pedras desgastadas e reparos estruturais.
+
+Diferencie castelos nobres, fortalezas militares, torres isoladas e castelos abandonados.
+
+Não utilize a mesma silhueta para todas as construções. Varie a composição das torres, a altura das muralhas, a posição das entradas e os elementos ornamentais.
+
+### Templos, criptas e masmorras
+
+Quando essas estruturas já existirem no projeto, melhore:
+- Pilares, arcos e corredores.
+- Altares e pedestais.
+- Portas de pedra e grades.
+- Sarcófagos e túmulos.
+- Escadarias subterrâneas.
+- Nichos nas paredes.
+- Inscrições e símbolos antigos.
+- Iluminação por tochas ou cristais.
+- Sinais de abandono e deterioração.
+
+Mantenha coerência entre a arquitetura, o ambiente e a função da estrutura.
+
+## 4. Técnicas de composição ASCII
+
+Aprimore o uso dos caracteres para representar profundidade, textura e materiais.
+
+- Utilize agrupamentos coerentes de símbolos para criar silhuetas.
+- Combine caracteres densos e leves para diferenciar superfícies.
+- Utilize cores existentes para separar planos e materiais.
+- Crie contornos legíveis sem depender exclusivamente de linhas retas.
+- Evite padrões excessivamente repetitivos.
+- Diferencie madeira, pedra, metal, tecido, vegetação e água.
+- Mantenha proporções consistentes entre elementos que compartilham a mesma escala.
+- Garanta que personagens e construções sejam reconhecíveis mesmo em tamanho reduzido.
+
+Se o projeto possuir um editor ou sistema de sprites ASCII, utilize o formato já existente. Caso os personagens sejam construídos diretamente no código, adapte a representação à arquitetura atual.
+
+Não introduza imagens convencionais como substituição dos caracteres ASCII.
+
+## 5. Consistência visual
+
+Estabeleça regras visuais compartilhadas entre personagens, biomas e construções.
+
+Os NPCs devem parecer pertencer ao mundo em que vivem. Um ferreiro deve combinar visualmente com sua oficina, um guarda com a fortaleza e um marinheiro com a vila costeira.
+
+Os materiais devem manter uma aparência consistente em todos os elementos.
+
+A riqueza visual deve vir da composição, das silhuetas, dos detalhes e das variações controladas, não apenas do aumento indiscriminado da quantidade de caracteres.
+
+## 6. Restrições
+
+- Não recrie a engine.
+- Não implemente geração procedural de mundos.
+- Não altere a arquitetura do jogo sem necessidade.
+- Não remova funcionalidades existentes.
+- Não substitua o sistema ASCII por sprites convencionais.
+- Não crie NPCs, biomas ou estruturas incompatíveis com o sistema atual.
+- Não adicione novos sistemas de gameplay sem necessidade.
+- Não prejudique a legibilidade ou o desempenho.
+- Preserve os sistemas de colisão, animação, interação e renderização existentes.
+
+## 7. Plano de execução
+
+1. Analise como NPCs, biomas e construções são representados atualmente.
+2. Identifique as limitações visuais e técnicas.
+3. Apresente um plano curto de melhorias.
+4. Aprimore os NPCs e suas silhuetas.
+5. Melhore a diversidade visual dos biomas existentes.
+6. Detalhe as construções medievais e seus materiais.
+7. Revise a consistência artística entre todos os elementos.
+8. Teste a renderização, as animações e o desempenho.
+
+Implemente as melhorias diretamente nos arquivos e recursos existentes quando houver acesso ao projeto.
+
+Não se limite a fornecer recomendações. Faça as alterações necessárias, valide o resultado e corrija problemas encontrados.
+
+## RESULTADO ESPERADO
+
+Quero um jogo ASCII com NPCs detalhados e reconhecíveis, biomas visualmente ricos e construções medievais com arquitetura elaborada.
+
+Os personagens devem ter personalidade visual. Os biomas devem apresentar diversidade ambiental. Casas, ruínas, castelos, oficinas e fortalezas devem possuir silhuetas e detalhes arquitetônicos próprios.
+
+Tudo deve permanecer fiel à estética ASCII, com uma identidade artística consistente, legibilidade em jogo e compatibilidade com a engine atual.

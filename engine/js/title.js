@@ -1,5 +1,5 @@
 'use strict';
-// Tela de menu inicial: cavaleiro com a espada de fogo diante do castelo em ruínas, toda em glifos ASCII animados.
+// Tela de menu inicial: o herói com a espada de fogo diante do castelo em ruínas, toda em glifos ASCII animados.
 (function () {
   const E = window.ENG;
   const CH = [...E.ATLAS_CHARS];
@@ -581,8 +581,65 @@
       this.drawTitle(put, t, glow);
       this.paint(ch, col);
     },
-    // cavaleiro em arte de linha (o mesmo desenho do herói), com a espada de fogo erguida
+    // o herói do jogo (pixel art convertido do Aseprite) de espada erguida sobre o rochedo, capa rubra ao vento
+    // e a espada em chamas; sem a folha do herói, usa o cavaleiro antigo em arte de linha
     knight(put, t, dt, glow) {
+      const img = E.Project && E.Project.player && E.Project.player.image;
+      if (!img || !img.parts || !img.meta || !E.heroPixels) return this.knightLine(put, t, dt, glow);
+      const LOOK = { cloak: 'rubra', boots: 'couro' }, WPN = { color: [1, 0.62, 0.25] }, FW = img.fw, FH = img.fh;
+      // pose: o quadro do golpe para cima em que a espada fica mais alta
+      if (this._heroF == null) {
+        const seq = String(img.anims.attackUp3 || img.anims.idle).split(',').map(Number);
+        let best = seq[0], by = 99;
+        for (const f of seq) {
+          const cv = E.heroPixels(img, f, { look: LOOK, weapon: WPN, cape: 'run', wave: 0 });
+          if (!cv) return this.knightLine(put, t, dt, glow); // folha ainda carregando
+          let top = 99;
+          for (let i = 0; i < cv.pmap.length; i++) if (cv.pmap[i] === 8) top = Math.min(top, Math.floor(i / FW));
+          if (top < by) (by = top), (best = f);
+        }
+        this._heroF = best;
+      }
+      const f = this._heroF, pc = E.heroPixels(img, f, { look: LOOK, weapon: WPN, cape: 'run', wave: Math.floor(t * 5) % 12 });
+      if (!pc) return this.knightLine(put, t, dt, glow);
+      const R = this.rows, kr = Math.round(R * 0.62), kc = Math.round(kr * this.ar), px = 6;
+      const W = kc * px, H = Math.round(kr * px * this.ar);
+      const cvs = (this._hc ||= document.createElement('canvas'));
+      if (cvs.width !== W || cvs.height !== H) (cvs.width = W), (cvs.height = H);
+      const cx = cvs.getContext('2d', { willReadFrequently: true });
+      cx.clearRect(0, 0, W, H);
+      cx.imageSmoothingEnabled = false;
+      const k = Math.min(W / FW, H / FH), dw = FW * k, dh = FH * k, offX = (W - dw) / 2, offY = H - dh;
+      cx.drawImage(pc, 0, 0, FW, FH, offX, offY, dw, dh);
+      // sem o rastro branco do golpe (na tela inicial a espada só arde)
+      for (let i = 0; i < pc.pmap.length; i++) if (pc.pmap[i] === 5) cx.clearRect(offX + (i % FW) * k - 0.5, offY + Math.floor(i / FW) * k - 0.5, k + 1, k + 1);
+      const cells = E.canvasToCells(cvs, kc, kr, 0.3, false);
+      const ox = Math.round(this.rock.x - kc / 2), oy = Math.round(this.rock.y - kr + 1);
+      const toCell = (x, y) => [ox + ((offX + (x + 0.5) * k) / W) * kc, oy + ((offY + (y + 0.5) * k) / H) * kr];
+      // mão e ponta da espada (pixels da arma: o mais perto e o mais longe da mão)
+      const M = img.meta[f], wp = [];
+      for (let i = 0; i < pc.pmap.length; i++) if (pc.pmap[i] === 8) wp.push([i % FW, Math.floor(i / FW)]);
+      const d2 = (q) => (q[0] - M.h[0]) ** 2 + (q[1] - M.h[1]) ** 2;
+      const hp = wp.length ? wp.reduce((a, q) => (d2(q) < d2(a) ? q : a)) : M.h, tp = wp.length ? wp.reduce((a, q) => (d2(q) > d2(a) ? q : a)) : M.h;
+      const hand = toCell(hp[0], hp[1]), tip = toCell(tp[0], tp[1]);
+      // apaga o cenário por dentro da silhueta e desenha o herói com a luz do fogo vinda da espada e o luar frio
+      for (let j = 0; j < kr; j++) for (let i = 0; i < kc; i++) if (cells.cells[j * kc + i]) put(ox + i, oy + j, ' ', [0, 0, 0]);
+      const flick = 0.85 + Math.sin(t * 13) * 0.08 + Math.sin(t * 7.3) * 0.07;
+      for (let j = 0; j < kr; j++)
+        for (let i = 0; i < kc; i++) {
+          const c = cells.cells[j * kc + i];
+          if (!c) continue;
+          const x = ox + i, y = oy + j;
+          const fire = clamp(1 - Math.hypot((x - hand[0]) / this.ar, y - hand[1]) / (kr * 0.6), 0, 1) * flick;
+          const moon = i < kc * 0.45 ? 0.14 : 0;
+          // blocos sombreados (como as letras do título): o pixel art fica nítido, sem listras
+          const lum = (0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2]) / 255;
+          put(x, y, lum > 0.6 ? '█' : lum > 0.4 ? '▓' : lum > 0.22 ? '▒' : '░', [Math.min(255, c[0] * 1.15 + fire * 110 + moon * 50), Math.min(255, c[1] * 1.15 + fire * 50 + moon * 60), Math.min(255, c[2] * 1.15 + fire * 5 + moon * 100)]);
+        }
+      this.swordFire(put, t, dt, glow, hand, tip, kr, flick);
+    },
+    // cavaleiro em arte de linha (o desenho antigo do herói), com a espada de fogo erguida
+    knightLine(put, t, dt, glow) {
       const R = this.rows;
       const kr = Math.round(R * 0.5), kc = kr * 2;
       const px = 6, W = kc * px, H = Math.round(kr * px * this.ar);
@@ -628,7 +685,10 @@
           const moon = i < kc * 0.47 ? 0.12 : 0;
           put(x, y, g === ' ' ? '.' : g, [Math.min(255, c[0] * 1.2 + fire * 110 + moon * 60), Math.min(255, c[1] * 1.2 + fire * 50 + moon * 70), Math.min(255, c[2] * 1.2 + fire * 5 + moon * 110)]);
         }
-      // espada de fogo: chamas pela lâmina, brilho e brasas
+      this.swordFire(put, t, dt, glow, hand, tip, kr, flick);
+    },
+    // espada de fogo: chamas pela lâmina, pluma de fogo, fumaça, brilho e brasas
+    swordFire(put, t, dt, glow, hand, tip, kr, flick) {
       const L = Math.hypot(tip[0] - hand[0], (tip[1] - hand[1]) * this.ar);
       for (let s = 0; s <= 1; s += 1 / Math.max(4, L)) {
         const x = hand[0] + (tip[0] - hand[0]) * s, y = hand[1] + (tip[1] - hand[1]) * s;

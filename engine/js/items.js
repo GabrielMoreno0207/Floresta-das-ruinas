@@ -29,9 +29,9 @@
       icon: I(['  ()  ', '  ||  ', ' /~~\\ ', '|♦~~♦|', ' \\__/ '], ['  mm  ', '  gg  ', ' gbbg ', 'gbBBbg', ' gggg '], PAL) },
     regen: { name: 'Erva curativa', glyph: '♣', color: [0.4, 1, 0.5], type: 'consumivel', stack: 9, effect: { status: 'regeneracao', time: 8 }, fx: 'cura', desc: 'Regenera vida aos poucos.',
       icon: I([' \\|/  ', '-♣♣♣- ', ' /|\\  ', '  |   '], [' lLl  ', 'lllll ', ' LlL  ', '  L   '], PAL) },
-    espada: { name: 'Espada curta', glyph: '/', color: [0.85, 0.9, 1], type: 'arma', stack: 1, weapon: { damage: 1, range: 1, color: [0.75, 0.9, 1] }, desc: 'Confiável.',
+    espada: { name: 'Espada curta', glyph: '/', color: [0.85, 0.9, 1], type: 'arma', stack: 1, weapon: { damage: 1, range: 1, color: [0.75, 0.9, 1], size: 0.9 }, desc: 'Confiável.',
       icon: I(['     /', '    / ', '   /  ', ' \\/   ', ' /\\   '], ['     w', '    s ', '   s  ', ' yy   ', ' m    '], PAL) },
-    espada_fogo: { name: 'Espada de fogo', glyph: '/', color: [1, 0.5, 0.15], type: 'arma', stack: 1, weapon: { damage: 2, range: 1.25, color: [1, 0.55, 0.2], status: 'queimando', fx: 'fogo', light: [1, 0.5, 0.2] }, desc: 'Incendeia os inimigos.',
+    espada_fogo: { name: 'Espada de fogo', glyph: '/', color: [1, 0.5, 0.15], type: 'arma', stack: 1, weapon: { damage: 2, range: 1.25, color: [1, 0.55, 0.2], status: 'queimando', fx: 'chama', elem: 'fogo', aura: 'fogo', tint: 0.8, light: [1, 0.5, 0.2] }, desc: 'Incendeia os inimigos.',
       icon: I(['   *^/', "  ' / ", '   /* ', ' \\/   ', ' /\\   '], ['   fFf', '  f f ', '   ff ', ' yy   ', ' m    '], PAL) },
     lanterna: { name: 'Lanterna', glyph: '☼', color: [1, 0.8, 0.4], type: 'luz', stack: 1, light: { c: [1, 0.78, 0.45], r: 46, i: 1.1 }, desc: 'Ilumina cavernas quando equipada.',
       icon: I(['  __  ', ' [==] ', ' |☼☼| ', ' |☼☼| ', ' [==] '], ['  gg  ', ' gggg ', ' gFFg ', ' gffg ', ' gggg '], PAL) },
@@ -57,14 +57,14 @@
       icon: I(['  ,-. ', ' /|  )', "  |-' ", '  |   ', '  |   '], ['  ss  ', ' sm s ', '  mss ', '  m   ', '  M   '], PAL) },
     lanca: { name: 'Lança', glyph: '/', color: [0.85, 0.8, 0.7], type: 'arma', stack: 1, price: 35, weapon: { damage: 1, range: 1.65, speed: 1.05, shape: 'lanca', color: [0.9, 0.9, 0.8] }, desc: 'Alcance longo. Mantém os inimigos à distância.',
       icon: I(['     ^', '    / ', '   /  ', '  /   ', ' /    '], ['     w', '    m ', '   m  ', '  m   ', ' M    '], PAL) },
-    adaga_veneno: { name: 'Adaga venenosa', glyph: '-', color: [0.45, 1, 0.4], type: 'arma', stack: 1, price: 55, weapon: { damage: 1, range: 0.75, speed: 1.6, status: 'veneno', shape: 'adaga', color: [0.5, 1, 0.45] }, desc: 'Muito rápida. Envenena a cada corte.',
+    adaga_veneno: { name: 'Adaga venenosa', glyph: '-', color: [0.45, 1, 0.4], type: 'arma', stack: 1, price: 55, weapon: { damage: 1, range: 0.75, speed: 1.6, status: 'veneno', fx: 'veneno', elem: 'veneno', shape: 'adaga', color: [0.5, 1, 0.45], tint: 0.6 }, desc: 'Muito rápida. Envenena a cada corte.',
       icon: I(['    ,/', '   // ', ' \\//  ', " /\\   ", "'     "], ['    ls', '   ss ', ' yy   ', ' m    ', 'l     '], PAL) },
     martelo_guerra: { name: 'Martelo de guerra', glyph: 'T', color: [0.6, 0.62, 0.7], type: 'arma', stack: 1, price: 90, weapon: { damage: 3, range: 1, speed: 0.65, knock: 2.4, shake: 5, shape: 'martelo', color: [0.75, 0.78, 0.85] }, desc: 'Lento e devastador. A terra treme.',
       icon: I(['[####]', '[####]', '  ||  ', '  ||  ', '  ##  '], ['gGGGGg', 'gGGGGg', '  mm  ', '  mm  ', '  MM  '], PAL) },
-    espada_gelo: { name: 'Espada de gelo', glyph: '/', color: [0.55, 0.85, 1], type: 'arma', stack: 1, price: 110, weapon: { damage: 2, range: 1.2, status: 'lento', fx: 'magia', light: [0.4, 0.8, 1], color: [0.6, 0.9, 1] }, desc: 'Congela: inimigos atingidos ficam lentos.',
+    espada_gelo: { name: 'Espada de gelo', glyph: '/', color: [0.55, 0.85, 1], type: 'arma', stack: 1, price: 110, weapon: { damage: 2, range: 1.2, status: 'lento', fx: 'gelo', elem: 'gelo', aura: 'gelo', tint: 0.75, light: [0.4, 0.8, 1], color: [0.6, 0.9, 1] }, desc: 'Congela: inimigos atingidos ficam lentos.',
       icon: I(['   * /', '    / ', ' * /  ', ' \\/   ', ' /\\   '], ['   i w', '    i ', ' i I  ', ' II   ', ' m    '], PAL) },
-    espada_cavaleiro: { name: 'Espada do cavaleiro', glyph: '/', color: [0.9, 0.9, 1], type: 'arma', stack: 1, price: 80, weapon: { damage: 2, range: 1.15, speed: 1, color: [0.85, 0.88, 1] }, desc: 'Lâmina larga e equilibrada.',
-      icon: I(['     /', '    / ', '   /  ', ' -#-  ', ' /    '], ['     w', '    s ', '   s  ', ' yyy  ', ' m    '], PAL) },
+    espada_cavaleiro: { name: 'Espada do cavaleiro', glyph: '/', color: [1, 0.86, 0.5], type: 'arma', stack: 1, price: 80, weapon: { damage: 2, range: 1.15, speed: 1, color: [1, 0.85, 0.45], fx: 'luz', elem: 'luz', aura: 'luz', tint: 0.55, layers: 3, size: 1.25 }, desc: 'Lâmina larga e dourada. Golpes amplos que brilham.',
+      icon: I(['    //', '   // ', '  //  ', ' =#=  ', ' /    '], ['    wF', '   wF ', '  wF  ', ' yoy  ', ' m    '], PAL) },
     cajado_arcano: { name: 'Cajado arcano', glyph: '!', color: [0.75, 0.5, 1], type: 'arma', stack: 1, price: 140, weapon: { damage: 1, range: 0.8, shape: 'cajado', color: [0.75, 0.5, 1], light: [0.6, 0.4, 1], projectile: { speed: 55, damage: 2, glyph: '●', color: [0.8, 0.55, 1], light: 12, homing: 0.5 } }, desc: 'Cada golpe lança um orbe mágico que persegue o alvo.',
       icon: I([' (o)  ', '  |   ', '  |   ', '  |   ', '  |   '], [' pPp  ', '  m   ', '  m   ', '  m   ', '  M   '], PAL) },
     arco_curto: { name: 'Arco curto', glyph: ')', color: [0.75, 0.55, 0.3], type: 'arma', stack: 1, price: 70, weapon: { damage: 0, range: 0.5, ranged: true, speed: 1.1, shape: 'arco', color: [0.9, 0.85, 0.7], projectile: { speed: 75, damage: 2, glyph: '>', color: [0.95, 0.9, 0.75], arc: true } }, desc: 'Atira flechas na direção do mouse.',
@@ -82,9 +82,9 @@
       icon: I(['  /\\  ', ' /  \\ ', '/ ♣  \\', '\\_/\\_/'], ['  ll  ', ' lLLl ', 'lLvLLl', 'lLLLLl'], PAL) },
     capa_sombria: { name: 'Capa sombria', glyph: 'Λ', color: [0.5, 0.3, 0.7], type: 'armadura', slot: 'corpo', stack: 1, price: 130, defense: 2, look: { cloak: 'sombra' }, desc: 'Feita de essência espectral. +2 defesa.',
       icon: I(['  /\\  ', ' /  \\ ', '/ ·· \\', '\\_/\\_/'], ['  PP  ', ' PppP ', 'PpwwpP', 'PPPPPP'], PAL) },
-    botas_aladas: { name: 'Botas aladas', glyph: 'ʟ', color: [0.9, 0.95, 1], type: 'armadura', slot: 'pes', stack: 1, price: 180, speed: 1.12, jumps: 1, look: { boots: 'couro' }, desc: '+1 pulo no ar e 12% mais rápido.',
+    botas_aladas: { name: 'Botas aladas', glyph: 'ʟ', color: [0.9, 0.95, 1], type: 'armadura', slot: 'pes', stack: 1, price: 180, speed: 1.12, jumps: 1, look: { boots: 'aladas' }, desc: '+1 pulo no ar e 12% mais rápido.',
       icon: I(['>| |< ', ' | |  ', '_|_|_ '], ['wm mw ', ' m m  ', 'MMMMM '], PAL) },
-    botas_ferro: { name: 'Botas de ferro', glyph: 'ʟ', color: [0.7, 0.72, 0.8], type: 'armadura', slot: 'pes', stack: 1, price: 70, defense: 1, speed: 0.96, look: {}, desc: '+1 defesa, um pouco mais pesadas.',
+    botas_ferro: { name: 'Botas de ferro', glyph: 'ʟ', color: [0.7, 0.72, 0.8], type: 'armadura', slot: 'pes', stack: 1, price: 70, defense: 1, speed: 0.96, look: { boots: 'ferro' }, desc: '+1 defesa, um pouco mais pesadas.',
       icon: I([' || ||', ' || ||', '_|L_|L'], [' ss ss', ' ss ss', 'GGGGGG'], PAL) },
     // consumíveis
     pocao_grande: { name: 'Poção grande', glyph: '♥', color: [1, 0.25, 0.3], type: 'consumivel', stack: 5, price: 45, effect: { heal: 6 }, fx: 'cura', desc: 'Recupera 6 de vida.',
@@ -133,11 +133,11 @@
       icon: I(['  ,_  ', '><(o)>', "  `'  "], ['  hh  ', 'hhHwHh', '  hh  '], PAL) },
     coracao_vital: { name: 'Coração vital', glyph: '♥', color: [1, 0.25, 0.35], type: 'consumivel', stack: 9, price: 200, effect: { maxHp: 1 }, fx: 'cura', desc: 'Cai dos chefes. +1 coração de vida máxima, para sempre.',
       icon: I([' _  _ ', '( \\/ )', ' \\  / ', '  \\/  '], [' r  r ', 'rRrrRr', ' rRRr ', '  rr  '], PAL) },
-    lamina_aracnidea: { name: 'Lâmina aracnídea', glyph: '-', color: [0.75, 0.45, 1], type: 'arma', stack: 1, price: 320, weapon: { damage: 3, range: 0.85, speed: 1.5, status: 'veneno', shape: 'adaga', color: [0.75, 0.45, 1], light: [0.55, 0.25, 0.85] }, desc: 'Presa da Rainha Aranha. Rapidíssima e venenosa.',
+    lamina_aracnidea: { name: 'Lâmina aracnídea', glyph: '-', color: [0.75, 0.45, 1], type: 'arma', stack: 1, price: 320, weapon: { damage: 3, range: 0.85, speed: 1.5, status: 'veneno', fx: 'veneno', elem: 'veneno', shape: 'adaga', color: [0.75, 0.45, 1], tint: 0.6, light: [0.55, 0.25, 0.85] }, desc: 'Presa da Rainha Aranha. Rapidíssima e venenosa.',
       icon: I(['    ,/', '   // ', ' \\//  ', ' /\\   ', "'     "], ['    pP', '   pp ', ' kk   ', ' P    ', 'l     '], PAL) },
     coroa_rei: { name: 'Coroa do Rei Esqueleto', glyph: '∩', color: [1, 0.85, 0.3], type: 'armadura', slot: 'cabeca', stack: 1, price: 420, defense: 3, immune: ['veneno'], look: { helmet: 'ouro' }, desc: '+3 defesa e imune a veneno.',
       icon: I([' ^ ^ ^', '|◆|◆||', '|____|'], [' y y y', 'yryryy', 'yyyyyy'], PAL) },
-    martelo_glacial: { name: 'Martelo glacial', glyph: 'T', color: [0.6, 0.9, 1], type: 'arma', stack: 1, price: 460, weapon: { damage: 5, range: 1.05, speed: 0.7, knock: 2.6, shake: 6, status: 'lento', fx: 'magia', shape: 'martelo', color: [0.6, 0.9, 1], light: [0.4, 0.8, 1] }, desc: 'Arrancado do Golem de Gelo. Congela e esmaga.',
+    martelo_glacial: { name: 'Martelo glacial', glyph: 'T', color: [0.6, 0.9, 1], type: 'arma', stack: 1, price: 460, weapon: { damage: 5, range: 1.05, speed: 0.7, knock: 2.6, shake: 6, status: 'lento', fx: 'gelo', elem: 'gelo', aura: 'gelo', tint: 0.7, shape: 'martelo', color: [0.6, 0.9, 1], light: [0.4, 0.8, 1] }, desc: 'Arrancado do Golem de Gelo. Congela e esmaga.',
       icon: I(['[*##*]', '[####]', '  ||  ', '  ||  ', '  ##  '], ['IiIIiI', 'IIIIII', '  mm  ', '  mm  ', '  MM  '], PAL) },
     geleia_real: { name: 'Geleia real', glyph: 'o', color: [1, 0.85, 0.3], type: 'consumivel', stack: 5, price: 80, effect: { heal: 99, status: 'regeneracao', time: 20 }, fx: 'cura', desc: 'Do Slime Rei. Cura tudo e regenera por 20 s.',
       icon: I([' .~~. ', '(◆oo◆)', " `~~' "], [' yyyy ', 'yoFFoy', ' oooo '], PAL) },
@@ -193,7 +193,7 @@
 
   // ---------- inventário ----------
   E.Inventory = class {
-    constructor(size = 20) {
+    constructor(size = 25) {
       this.slots = Array(size).fill(null);
       this.weapon = 'espada';
       this.light = null;
@@ -229,6 +229,12 @@
       return Object.values(this.gear || {}).some((id) => id && (this.def(id)?.immune || []).includes(name));
     }
     unequip(slot) {
+      // 'arma' guarda a arma na mochila e deixa o herói de mãos vazias
+      if (slot === 'arma') {
+        if (!this.weapon || !this.add(this.weapon, 1)) return false;
+        this.weapon = null;
+        return true;
+      }
       const id = this.gear[slot];
       if (!id) return false;
       if (!this.add(id, 1)) return false;
@@ -331,7 +337,9 @@
       return false;
     }
     weaponDef() {
-      const base = (this.weapon && this.def(this.weapon)?.weapon) || { damage: 1, range: 1, color: [0.75, 0.9, 1] };
+      // sem arma: punhos (alcance curto, rápidos, empurram um pouco)
+      if (!this.weapon || !this.def(this.weapon)?.weapon) return { damage: 1, range: 0.62, speed: 1.3, knock: 1.2, color: [1, 0.9, 0.75], shape: 'mao', unarmed: true };
+      const base = this.def(this.weapon).weapon;
       const lv = this.level(this.weapon);
       if (!lv) return base;
       const o = Object.assign({}, base, { damage: (base.damage || 0) + (base.ranged ? 0 : lv) });
